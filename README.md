@@ -1,6 +1,6 @@
-# XScript
-DSL(领域特定语言) for erlang,  适用于erlang的脚本语言。
-主要使用erlang的leex和yecc模块进行词法、语法分析，再转换成对应的erlang语言
+# ErlScript
+DSL(领域特定语言) for erlang,  适用于erlang的脚本语言。<br/>
+主要使用erlang的leex和yecc模块进行词法、语法分析，再转换成对应的erlang语言。
 
 ## 目录说明
 script: 示例脚本以及生成的代码<br/>
