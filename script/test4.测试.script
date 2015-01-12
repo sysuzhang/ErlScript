@@ -1,0 +1,27 @@
+find_target(1,enemy_scope(1,0,0,0), 170, 40);
+if(check_target(1,num) > 0 && level() > 3)
+{
+      apply(1,skill,1204);
+      wait(2000);
+      moverandom(1500);
+}
+else
+{
+    find_target(enemy_scope(1,0,0,0,1000,1000));
+    if(check_target(2,num) > 0)
+    { 
+         move(3,10000,500); 
+         wait(500);
+    }    
+    else
+    {
+        moverandom(1000);
+        wait(1000);
+    }  
+}
+
+while(random_find(1,num) > 0)
+{
+     attack_target(100);
+     create_monster(1,500);
+}

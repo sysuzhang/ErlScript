@@ -1,0 +1,11 @@
+if(level() > 3)
+{
+      apply(1,skill,1204);
+      find_target(300,222,12);
+}
+else
+{
+    apply(2,skill,1205); 
+    find_target(enemy_scope(1,0,0,0,1000,1000));     
+}
+

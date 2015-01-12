@@ -1,0 +1,5 @@
+while(random_find(1,num) > 0)
+{
+     attack_target(100);
+     create_monster(1,500);
+}
