@@ -25,8 +25,8 @@ xscript_compile:generate_file(ScriptFilename, Options):<br/>
   Options: 选项,当前支持: {out_dir, Dir}: 指定文件生成目录<br/>
 
 
-## 示例example(对应的生成文件，见script):
-`
+## 示例example(对应的生成文件，见script目录):
+{ {{ 
 example1: <br/> 
 
 create_monster();
@@ -51,7 +51,9 @@ while(random_find(1,num) > 0)
      attack_target(100);
      create_monster(1,500);
 }
-`
+
+}} }
+
 ## 调用API:
 script_脚本basename:execute().<br/>
 
