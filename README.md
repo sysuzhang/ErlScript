@@ -26,33 +26,32 @@ xscript_compile:generate_file(ScriptFilename, Options):<br/>
 
 
 ## 示例example(对应的生成文件，见script目录):
-{ {{ 
-example1: <br/> 
+        //example1: 
+        
+        create_monster();
+        create_monster(1,500);
+        create_monster(2,400);
+        
+        //example2: 
+        if(level() > 3)
+        {
+              apply(1,skill,1204);
+              find_target(300,222,12);
+        }
+        else
+        {
+            apply(2,skill,1205); 
+            find_target(enemy_scope(1,0,0,0,1000,1000));     
+        }
+        
+        //example3:
+        while(random_find(1,num) > 0)
+        {
+             attack_target(100);
+             create_monster(1,500);
+        }
 
-create_monster();
-create_monster(1,500);
-create_monster(2,400);
-
-example2: 
-if(level() > 3)
-{
-      apply(1,skill,1204);
-      find_target(300,222,12);
-}
-else
-{
-    apply(2,skill,1205); 
-    find_target(enemy_scope(1,0,0,0,1000,1000));     
-}
-
-example3:
-while(random_find(1,num) > 0)
-{
-     attack_target(100);
-     create_monster(1,500);
-}
-
-}} }
+ 
 
 ## 调用API:
 script_脚本basename:execute().<br/>
