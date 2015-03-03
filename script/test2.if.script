@@ -8,4 +8,3 @@ else
     apply(2,skill,1205); 
     find_target(enemy_scope(1,0,0,0,1000,1000));     
 }
-

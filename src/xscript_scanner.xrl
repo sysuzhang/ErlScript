@@ -12,6 +12,7 @@ Rules.
 if : {token, {'IF', TokenLine}}.
 else : {token, {'ELSE', TokenLine}}. 
 while :  {token, {'WHILE', TokenLine}}. 
+wait :  {token, {'WHAIT', TokenLine}}. 
 && : {token, {'&&', TokenLine}}. 
 \|\| : {token, {'||', TokenLine}}. 
 ! : {token, {'!', TokenLine}}. 

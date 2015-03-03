@@ -10,7 +10,7 @@ execute() ->
         xscript_function_define:check_target(1,num) > 0  andalso
         xscript_function_define:level() > 3  of 
         true ->
-            xscript_function_define:apply(1,skill,1204),
+            exec(?LINE,xscript_function_define:apply(1,skill,1204)),
             xscript_function_define:wait(2000),
             xscript_function_define:moverandom(1500);
         false ->

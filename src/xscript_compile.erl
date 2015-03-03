@@ -170,6 +170,8 @@ statement(FileRef, Indent, Statement) ->
             gen_output(FileRef, 0, "\n"),             
             gen_output(FileRef, Indent + ?INDENT_SPACE, "end)"),             
             ok;
+        {'WAIT', Conditions, Statements} ->
+            ok;
         _ ->
             ok
     end.

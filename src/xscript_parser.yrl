@@ -3,7 +3,7 @@ Nonterminals
 scripts statements statement function args arg express conditions condition compare vars arithmetic logic.
 
 %终结符
-Terminals '+' '-' '*' '/' '&&' '||' '!' '>' '<' '==' ';' ',' '(' ')' '{' '}' 'IF' 'ELSE' 'WHILE'  atom integer float var.
+Terminals '+' '-' '*' '/' '&&' '||' '!' '>' '<' '==' ';' ',' '(' ')' '{' '}' 'IF' 'ELSE' 'WHILE' 'WAIT' atom integer float var.
 
 Rootsymbol scripts.
 
@@ -14,13 +14,14 @@ scripts -> statements : '$1'.
 %%段落分析
 statements -> statement : ['$1'].
 statements -> statement statements : ['$1' | '$2'].
-
+statements -> 'WAIT' '(' args ')' ';' statements : {'WAIT', '$3', '$6'}.   %%异步转换
 
 %%语句分析
 statement -> function ';' :  {function, '$1'}. 
 statement -> 'IF' '(' conditions ')' '{' statements '}' : {'IF', '$3', '$5'}.
 statement -> 'IF' '(' conditions ')' '{' statements '}' 'ELSE' '{' statements '}' :  {'IF','$3','$6','$10'}.
 statement -> 'WHILE' '(' conditions ')' '{' statements '}' : {'WHILE', '$3', '$6'}.
+
 
 %%条件分析
 conditions -> condition : {condition, '$1'}.
