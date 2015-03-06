@@ -1,0 +1,7 @@
+backend_version=17.0
+eclipse.preferences.version=1
+external_includes=
+external_modules=
+include_dirs=src/Game/Inc;src/Game/Proto;src/Game/Config;include;
+output_dir=ebin
+source_dirs=src/XEngine/XNet;src/XEngine/XMysql;src/XEngine/XLog;src/XEngine/XLog;src/XEngine/XEts;src/XEngine/XEvent;src/XEngine/XGlobal;src/XEngine/XCommon;src/XEngine;src/XEngine/XParser;src/Game/Test;src/Game/Proto;src/Game/Proc;src/Game/Mod;src/Game/Lib;src/Game/Db;src/Game/Config;src/Game/Script;src/Game;src/flash;src;src/Tools;src/Tools/protobuf;src/Tools/test;
