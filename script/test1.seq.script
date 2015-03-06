@@ -1,4 +1,4 @@
 create_monster();
+create_monster(5);
 wait(100);
-create_monster(1,500);
-create_monster(2,400);
+ 

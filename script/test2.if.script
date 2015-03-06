@@ -1,10 +1,23 @@
+moverandom();
 if(level() > 3)
 {
       apply(1,skill,1204);
+      wait(100);
       find_target(300,222,12);
 }
 else
 {
-    apply(2,skill,1205); 
-    find_target(enemy_scope(1,0,0,0,1000,1000));     
+    apply(2,skill,1205);
+    wait(200);
+    if( level() > 5)
+    {
+        wait(300);
+        attack_target(200,300,400,500);
+    } 
+    find_target(enemy_scope(1,0,0,0,1000,1000));   
+    if (level() > 0)
+    {
+        moverandom();
+    }  
 }
+move(100,200,300);

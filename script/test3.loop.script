@@ -1,5 +1,7 @@
-while(random_find(1,num) > 0)
+ while(random_find(1,num) > 0)
 {
      attack_target(100);
+     wait(100);
      create_monster(1,500);
 }
+move(100,200,300);

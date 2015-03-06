@@ -811,7 +811,7 @@ yyaction_2(TokenLine) ->
 -compile({inline,yyaction_3/1}).
 -file("src/xscript_scanner.xrl", 13).
 yyaction_3(TokenLine) ->
-     { token, { 'WHAIT', TokenLine } } .
+     { token, { 'WAIT', TokenLine } } .
 
 -compile({inline,yyaction_4/1}).
 -file("src/xscript_scanner.xrl", 14).

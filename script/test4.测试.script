@@ -12,11 +12,13 @@ else
     { 
          move(3,10000,500); 
          wait(500);
+         apply(12,skill,22);
     }    
     else
     {
         moverandom(1000);
         wait(1000);
+        apply(55,skill,66);
     }  
 }
 
