@@ -13,13 +13,16 @@
 -export([comment/1]).
 
 -define(INDENT_SPACE, 4).
-
 -define(SINGLE_STATEMENT, -1).
 -define(DEFAULT_FUNID , 0).
 -define(DEFAULT_TAILFUNID, 0).
 
 -define(DEFAULT_OUTPUT_FILE, "xscript_mod_script").
 -define(INCLUDE_FILE, "-include(\"xscript.hrl\").\n\n").
+
+%%函数映射模块
+-define(FUNCTION_MAP_MODULE, xscript_function_map).
+-define(FUNCTION_MAP_FUNCTION, get_function_map).
 
 %%代码生成保存
 -record(script_source, {scriptid = undefined,
@@ -405,7 +408,7 @@ statements(FileRef, Indent, Statements, SID, TailFunID) ->
 wait_statement(FileRef, Indent, WaitStatement, FunId) ->
     case WaitStatement of
         {'WAIT', [Time]} ->
-            case xscript_function_map:get_function_map(wait) of
+            case ?FUNCTION_MAP_MODULE:?FUNCTION_MAP_FUNCTION (wait) of
                 {Module, _} ->
                     ScriptId = get_scriptid(),
                     Output = io_lib:format("~w:~w(~w, ~w, {~w, ~w, ~w})", [Module, wait, Time, ScriptId, Module, FunId, []]),
