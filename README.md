@@ -74,8 +74,7 @@ if/while/wait 子句转换成函数，并且成为程序的尾函数，所有函
 编译原理对应的是关键字是：statements statement functions.....<br/>
 语法分析参考对应的语法分析文件，核心是：<br/>
 <pre>
-    %%段落分析 
-    
+    %%段落分析     
     statements -> wait_function ';' : {wait_function, '$1'}.
     statements -> wait_function ';' statements : [{wait_function, '$1', '$3'}].  %%异步等待语句
     statements -> if_statement : {if_statement, '$1'}.
