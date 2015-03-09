@@ -10,6 +10,7 @@
 %% ====================================================================
 -export([generate_file/1, generate_file/2]).
 -export([generate_dir/1, generate_dir/2]).
+-export([comment/1]).
 
 -define(INDENT_SPACE, 4).
 
@@ -17,30 +18,40 @@
 -define(DEFAULT_FUNID , 0).
 -define(DEFAULT_TAILFUNID, 0).
 
+-define(DEFAULT_OUTPUT_FILE, "xscript_mod_script").
+-define(INCLUDE_FILE, "-include(\"xscript.hrl\").\n\n").
+
 %%代码生成保存
--record(script_source, {exports = [],
+-record(script_source, {scriptid = undefined,
                         functions = [],
                         main = [],
                         funid = 0
                         }).
 
 
--export([test/0, test1/0, test2/0, test3/0, test4/0]).
+-export([test/0, test1/0, test2/0, test3/0, test4/0, test_one/0, test_dir/0]).
 test() ->
     test1(),
     test2(),
     test3(),
     test4(),
+    
     ok.
     
 test1() ->
-    generate_file("./script/test1.seq.script", []).
+    generate_file("./script/1.seq.script", [{out_dir, "./script/"}]).
 test2() ->
-    generate_file("./script/test2.if.script", [{out_dir, "./script/"}]).
+    generate_file("./script/2.if.script", [{out_dir, "./script/"}]).
 test3() ->
-    generate_file("./script/test3.loop.script", [{out_dir, "./script/"}]).
+    generate_file("./script/3.loop.script", [{out_dir, "./script/"}]).
 test4() ->
-    generate_file("./script/test4.测试.script", [{out_dir, "./script/"}]).
+    generate_file("./script/4.测试.script", [{out_dir, "./script/"}]).
+
+test_one() ->
+    generate_files(["./script/1.seq.script", "./script/2.if.script", "./script/3.loop.script"], [{out_dir, "./script/"}]).
+
+test_dir() ->
+    generate_dir("./script/", [{out_dir, "./script/"}]).
 
 get_funid() ->
     case get(script_source) of
@@ -54,34 +65,115 @@ get_funid() ->
            FunId + 1
     end.
 
-
-test_dir() ->
-    generate_dir("./script/", []).
-
 generate_file(ProtoFile) ->
   generate_file(ProtoFile,[]).
 
+get_output_filename(Options) ->
+    proplists:get_value(out_file, Options, ?DEFAULT_OUTPUT_FILE).
+%%Options:[{key, value}]
+%%{one_output, true|false} : 是否输出一个文件
+%%{out_dir, OutDir} : 输出目录
+generate_file(ScriptFile, Options) ->
+    generate_files([ScriptFile], Options).
+generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->    
+    {IsAllInOne, OutputOneFileName} =
+        case proplists:get_value(one_output, Options) of 
+            true ->
+                {true, get_output_filename(Options)};
+            false ->
+                {false, ""};
+            _ ->
+                {true, get_output_filename(Options)}
+        end,
+    
+    case IsAllInOne of
+        true ->            
+            %%所有脚本生成一个文件
 
-generate_file(ScriptFile,Options) when is_atom(ScriptFile) ->
-    generate_file(atom_to_list(ScriptFile) ++ ".script", Options);
-generate_file(ScriptFile,Options) when is_list(ScriptFile) ->
-    Rootname = rootname(ScriptFile),
-    DefaultOutDir = filename:dirname(ScriptFile),
-    Basename = "script_" ++ Rootname , 
-    {ok,String} = parse_file(ScriptFile),   %%词法分析
-    {ok,FirstParsed} = xscript_parser:parse(String),
-    put(script_source, #script_source{}),
-    analyze_parser(FirstParsed),
-    output_source(Basename, FirstParsed, Options, DefaultOutDir),
-    %output_source(),
+            OutDir = 
+                case proplists:get_value(out_dir, Options) of
+                    undefined ->
+                        ".";
+                    Dir ->
+                        filename:dirname(Dir)
+                end,
+            
+            OutputFile = OutDir ++ "/" ++ OutputOneFileName ++ ".erl",
+            
+            {ok, FileRef} = xscript_file:open(OutputFile, [write]),    
+            output_header(FileRef, OutputOneFileName),
+            output_include(FileRef),
+            
+            output_default_funtion(FileRef),
+            
+            lists:foreach(fun(File) -> 
+                                  ScriptId = rootname(File),
+                                  {ok,String} = parse_file(File),   %%词法分析
+                                  {ok,FirstParsed} = xscript_parser:parse(String),
+                                  put(script_source, #script_source{scriptid =list_to_integer(ScriptId)}), 
+                                  %%添加注释
+                                  Comment = comment(File),
+                                  
+                                  CommentBin = unicode:characters_to_binary(Comment),
+                                  CommentStr = io_lib:format("\n%%~ts", [CommentBin]),
+                                  gen_output(FileRef, 0, CommentStr),
+                                  output_source(FileRef, FirstParsed)
+                          end, ScriptFiles),   
+            
+            output_other_function_match(FileRef),
+            xscript_file:close(FileRef),
+            ok;
+        false ->
+            %%每个脚本对应一个独立的文件
+            lists:foreach(fun(File) -> 
+                                  OutDir =   
+                                      case proplists:get_value(out_dir, Options) of
+                                          undefined ->
+                                              filename:dirname(File);
+                                          Dir ->
+                                              filename:dirname(Dir)
+                                      end,
+                                  ScriptId = rootname(File),
+                                  Basename = "script_" ++ ScriptId , 
+                                  OutputFile = OutDir ++ "/" ++ Basename ++ ".erl",
+                                  filelib:ensure_dir(OutputFile),
+                                  
+                                  {ok, FileRef} = xscript_file:open(OutputFile, [write]),    
+                                  output_header(FileRef, Basename),
+                                  
+                                  {ok,String} = parse_file(File),   %%词法分析
+                                  {ok,FirstParsed} = xscript_parser:parse(String),
+                                  put(script_source, #script_source{scriptid =ScriptId}), 
+                                  output_source(FileRef, FirstParsed),
+                                  xscript_file:close(FileRef)
+                          end, ScriptFiles), 
+            ok
+    end,
+     
     ok.
-
+ 
+%%按目录生成
+%%Options: [{key, value}]
+%%
+generate_dir(Dirname, Options) ->
+    case file:list_dir(Dirname) of
+        {ok, FileList} ->
+            Files = lists:foldr(fun(File, Acc) ->
+                                        case filename:extension(File) of
+                                            ".script" ->
+                                                [Dirname ++ File | Acc];
+                                            _ ->
+                                                Acc
+                                        end
+                                end, [], FileList),
+            generate_files(Files, Options);
+        _ ->
+            dd
+    end, 
+    ok.
 
 generate_dir(Dirname) ->
-    ok.
-
-generate_dir(Dirname, Options) ->
-    ok.
+    generate_dir(Dirname, []).
 
 %% ====================================================================
 %% Internal functions
@@ -89,7 +181,7 @@ generate_dir(Dirname, Options) ->
 
 
 %% @hidden
-
+%%第1个.号之前是rootname
 rootname(Filename) ->  
     case filename:rootname(Filename) of
         Filename ->
@@ -98,34 +190,64 @@ rootname(Filename) ->
             rootname(Rootname)
     end.
 
-analyze_parser(FirstParsed) ->
-    ok.
+%%获得文件名包含的注释
+comment(Filename) ->    
+    try 
+        Length = max(string:rchr(Filename, $.), 1) - 1,  
+        SubFile = string:substr(Filename, 1, Length), 
+        string:sub_string(filename:extension(SubFile), 2) 
+    of
+        Comment ->
+            Comment
+    catch
+        _:_ ->
+            ""
+    end.
+ 
+get_scriptid() ->
+    case get(script_source) of 
+        #script_source{scriptid = ScriptId}->
+            ScriptId;
+        _ ->
+            0
+    end.
+        
 
-output_source(Basename, Scripts, Options, DefaultOutDir) ->
-    OutDir = 
-        case proplists:get_value(out_dir, Options) of
-            undefined ->
-                DefaultOutDir;
-            Dir ->
-                filename:dirname(Dir)
-        end,
-    OutputFile = OutDir ++ "/" ++ Basename ++ ".erl",
-    filelib:ensure_dir(OutputFile),
-    {ok, FileRef} = xscript_file:open(OutputFile, [write]),    
-    output_header(FileRef, Basename),
-    Output = io_lib:format("execute() ->\n", []),
+output_source(FileRef, ScriptParse) ->
+    ScriptId = get_scriptid(),
+    Output = io_lib:format("\nscript_execute(~w, 0) ->\n", [ScriptId]),
     gen_output(FileRef, 0, Output),
-    scripts(FileRef, ?INDENT_SPACE, Scripts),   
-    output_functions(),
-    %gen_output(FileRef, 0, "."),
-    xscript_file:close(FileRef),
+    scripts(FileRef, ?INDENT_SPACE, ScriptParse),   
+    output_functions(),     
+    gen_output(FileRef, 0, "\n"), 
+     
     ok.
 
 output_header(FileRef, Module) ->
-    Header = io_lib:format("%%自动生成,请不要修改\n%%@datetime:{~w~w}\n-module(~s).\n\n-compile([expert_all]).\n\n", 
+    Header = io_lib:format("%%自动生成,请不要修改\n%%@datetime:{~w~w}\n-module(~s).\n\n-compile([export_all]).\n\n", 
                            [erlang:date(), erlang:time(), Module]), 
     gen_output(FileRef, 0, Header),
     ok.
+
+output_include(FileRef) ->
+    IncludeStr = io_lib:format(?INCLUDE_FILE, []),
+    gen_output(FileRef, 0, IncludeStr).
+    
+
+output_default_funtion(FileRef) ->
+    FunStr = io_lib:format("script_execute(ScriptId) ->\n", []), 
+    gen_output(FileRef, 0, FunStr),
+    FunBodyStr = io_lib:format("script_execute(ScriptId, 0).\n", []),
+    gen_output(FileRef, ?INDENT_SPACE, FunBodyStr),
+    ok.
+
+output_other_function_match(FileRef) ->
+    FunStr = io_lib:format("script_execute(ScriptId, FunId) ->\n", []), 
+    gen_output(FileRef, 0, FunStr),
+    FunBodyStr = io_lib:format("?LOG_DEBUG(\"Not Defined ScriptId: ~cw, FunId:~cw\", [ScriptId, FunId]).\n", [$~, $~]),
+    gen_output(FileRef, ?INDENT_SPACE, FunBodyStr),
+    ok.
+
 
 parse_file(FileName) ->
     {ok, InFile} = xscript_file:open(FileName, [read]),
@@ -150,7 +272,7 @@ scripts(_FileRef, _Indent, []) ->
     ok;
 scripts(FileRef, Indent, Statements) ->
     statements(FileRef, Indent, Statements, ?DEFAULT_FUNID, ?DEFAULT_TAILFUNID),
-    gen_output(FileRef, 0, "."),
+    gen_output(FileRef, 0, ";"),   %%脚本结尾
     ok.
 
 output_functions() ->
@@ -167,7 +289,8 @@ output_functions() ->
 output_functions(Fun) ->
     case Fun of
         {FunId, FileRef, {while, WhileStatements}} ->
-            StrFun = io_lib:format("\nscript_function(~w) ->\n", [FunId]),
+            ScriptId = get_scriptid(),
+            StrFun = io_lib:format("\nscript_execute(~w, ~w) ->\n", [ScriptId, FunId]),
             gen_output(FileRef, 0, StrFun),
             TailFunId = 
                 case get({func, FunId}) of
@@ -176,9 +299,11 @@ output_functions(Fun) ->
                     TFID ->
                         TFID
                 end,
-            while_statement(FileRef, ?INDENT_SPACE, WhileStatements, FunId, TailFunId);
+            while_statement(FileRef, ?INDENT_SPACE, WhileStatements, FunId, TailFunId),
+            gen_output(FileRef, 0, ";");   %% Function结束
         {FunId, FileRef, Statements} ->
-            StrFun = io_lib:format("\nscript_function(~w) ->\n", [FunId]),
+            ScriptId = get_scriptid(),
+            StrFun = io_lib:format("\nscript_execute(~w, ~w) ->\n", [ScriptId, FunId]),
             gen_output(FileRef, 0, StrFun),
             TailFunId = 
                 case get({func, FunId}) of
@@ -188,7 +313,7 @@ output_functions(Fun) ->
                         TFID
                 end,
             statements(FileRef, ?INDENT_SPACE, Statements, FunId, TailFunId),
-            gen_output(FileRef, 0, ".");
+            gen_output(FileRef, 0, ";");  %%statement结束
         _ ->
             next
     end,
@@ -219,7 +344,8 @@ statements(FileRef, Indent, Statements, SID, TailFunID) ->
             function(FileRef, Indent, Fun_statement),
             if TailFunID =/= ?DEFAULT_TAILFUNID -> 
                    gen_output(FileRef, 0, ",\n"),
-                   Str = io_lib:format("script_function(~w)", [TailFunID]),
+                   ScriptId = get_scriptid(),
+                   Str = io_lib:format("script_execute(~w, ~w)", [ScriptId, TailFunID]),
                    gen_output(FileRef, Indent, Str);
                true ->
                    next
@@ -253,10 +379,10 @@ statements(FileRef, Indent, Statements, SID, TailFunID) ->
             ok;
         {while_statement, WhileStatements} ->
             NewFunID = get_funid(),
-            StrWhile = io_lib:format("script_function(~w)", [NewFunID]),
+            ScriptId = get_scriptid(),
+            StrWhile = io_lib:format("script_execute(~w, ~w)", [ScriptId, NewFunID]),
             gen_output(FileRef, Indent, StrWhile),
-            put({func, NewFunID}, TailFunID),
-            %while_statement(FileRef, Indent, WhileStatements, SID, TailFunID),           
+            put({func, NewFunID}, TailFunID),         
             shift_statement(FileRef, {while, WhileStatements}, NewFunID),
             ok;
         [{while_statement, WhileStatements, OtherStatements}] ->
@@ -266,7 +392,8 @@ statements(FileRef, Indent, Statements, SID, TailFunID) ->
             shift_statement(FileRef, OtherStatements, NewFunID),
             
             NewWhileFunID = get_funid(),
-            StrWhile = io_lib:format("script_function(~w)", [NewWhileFunID]),
+            ScriptId = get_scriptid(),
+            StrWhile = io_lib:format("script_execute(~w, ~w)", [ScriptId, NewWhileFunID]),
             gen_output(FileRef, Indent, StrWhile),
             put({func, NewWhileFunID}, NewFunID),
             shift_statement(FileRef, {while, WhileStatements}, NewWhileFunID),
@@ -280,7 +407,8 @@ wait_statement(FileRef, Indent, WaitStatement, FunId) ->
         {'WAIT', [Time]} ->
             case xscript_function_map:get_function_map(wait) of
                 {Module, _} ->
-                    Output = io_lib:format("~w:~w(~w, {~w, ~w, ~w})", [Module, wait, Time, Module, FunId, []]),
+                    ScriptId = get_scriptid(),
+                    Output = io_lib:format("~w:~w(~w, ~w, {~w, ~w, ~w})", [Module, wait, Time, ScriptId, Module, FunId, []]),
                     gen_output(FileRef, Indent, Output);
                 _ ->
                     throw({"Not Define Function: ~w", [wait]})
@@ -317,7 +445,8 @@ if_statement(FileRef, Indent, IfStatement, SID, TailFunID) ->
             gen_output(FileRef, Indent + ?INDENT_SPACE, "_ ->\n"),   
             
             if TailFunID =/= ?DEFAULT_TAILFUNID ->
-                   TailStr = io_lib:format("script_function(~w)\n", [TailFunID]),
+                   ScriptId = get_scriptid(),
+                   TailStr = io_lib:format("script_execute(~w, ~w)\n", [ScriptId, TailFunID]),
                    gen_output(FileRef, Indent + ?INDENT_SPACE * 2, TailStr);
                true ->
                    gen_output(FileRef, Indent + ?INDENT_SPACE * 2, "ok\n")
@@ -353,10 +482,11 @@ while_statement(FileRef, Indent, WhileStatements, SID, TailFunID) ->
              
              gen_output(FileRef, Indent + ?INDENT_SPACE, "_ ->\n"),
              if TailFunID =/= ?DEFAULT_TAILFUNID ->
-                   TailStr = io_lib:format("script_function(~w)\n", [TailFunID]),
-                   gen_output(FileRef, Indent + ?INDENT_SPACE * 2, TailStr);
+                    ScriptId = get_scriptid(),
+                    TailStr = io_lib:format("script_execute(~w, ~w)\n", [ScriptId, TailFunID]),
+                    gen_output(FileRef, Indent + ?INDENT_SPACE * 2, TailStr);
                true ->
-                   gen_output(FileRef, Indent + ?INDENT_SPACE * 2, "ok\n")
+                    gen_output(FileRef, Indent + ?INDENT_SPACE * 2, "ok\n")
              end,
              gen_output(FileRef, Indent, "end"),
              ok;

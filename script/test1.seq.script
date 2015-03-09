@@ -1,4 +1,0 @@
-create_monster();
-create_monster(5);
-wait(100);
- 
