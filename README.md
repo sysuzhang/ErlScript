@@ -55,7 +55,7 @@ xscript_compile:generate_file(ScriptFilename, Options):<br/>
  
 
 ## 调用API:
-script_脚本basename:execute().<br/>
+ErlScriptOutputModule:script_execute(ScriptId).<br/>
 
 
 ## 扩展
@@ -66,8 +66,22 @@ script_脚本basename:execute().<br/>
 
 #### 同步阻塞代码清除方法：
 1. 将if子句转换为尾函数: if子句后的段落提取成if各条件分支的尾函数，则if子句变成整个段落的尾函数。<br/>
-2. while子句本身看作一个尾函数<br/>
+2. while子句本身看作一个尾函数, 那么while后的所有段落需要提取成一个尾函数作为while函数的尾函数<br/>
 3. 将wait子句转换为尾函数： 将wait子句后的段落提取成一个尾函数，wait通过异步调用的方法调用该尾函数<br/>
+
+上面的说明比较绕，一句话说明是：
+if/while/wait 子句转换成函数，并且成为程序的尾函数，所有函数递归包含尾函数，在执行完自己的函数后，调用尾函数即可。<br />
+编译原理对应的是关键字是：statements statement functions.....<br/>
+语法分析参考对应的语法分析文件，核心是：<br/>
+        %%段落分析 
+        statements -> wait_function ';' : {wait_function, '$1'}.
+        statements -> wait_function ';' statements : [{wait_function, '$1', '$3'}].  %%异步等待语句
+        statements -> if_statement : {if_statement, '$1'}.
+        statements -> if_statement statements : [{if_statement, '$1', '$2'}].        %%IF语句
+        statements -> while_statement : {while_statement, '$1'}.
+        statements -> while_statement statements : [{while_statement, '$1', '$2'}].  %%WHILE语句
+        statements -> function ';' : [{function, '$1'}].
+        statements -> function ';' statements: [{function, '$1'} | '$3'].
 
 
 ## ToDo:
