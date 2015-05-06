@@ -401,6 +401,18 @@ statements(FileRef, Indent, Statements, SID, TailFunID) ->
             put({func, NewWhileFunID}, NewFunID),
             shift_statement(FileRef, {while, WhileStatements}, NewWhileFunID),
             ok;
+        {var, Var, Fun_statement} ->%%支持变量
+            StrVar = io_lib:format("~w = ", [Var]),
+            gen_output(FileRef, Indent, StrVar),
+            function(FileRef, Indent, Fun_statement),
+            ok;
+        [{var, Var, Fun_statement} | OtherStatements] ->
+            StrVar = io_lib:format("~s = ", [Var]),
+            gen_output(FileRef, Indent, StrVar),
+            function(FileRef, 0, Fun_statement),
+            gen_output(FileRef, 0, ",\n"),
+            statements(FileRef, Indent, OtherStatements, SID, TailFunID),
+            ok;
         _ ->
             ok
     end.
@@ -577,8 +589,15 @@ arithmetic(FileRef, Indent, Arithmetic) ->
     gen_output(FileRef, Indent, StrAtith),
     ok.
 
-vars(FileRef, Indent, Vars) -> 
-    StrVars = io_lib:format(" ~w ", [Vars]),
+vars(FileRef, Indent, Vars) ->
+    StrVars = 
+        case Vars of
+            V when erlang:is_integer(V) orelse erlang:is_float(V) ->
+                io_lib:format(" ~w ", [Vars]);
+            _ ->
+                io_lib:format(" ~s ", [Vars])
+        end,
+            
     gen_output(FileRef, Indent, StrVars),
     ok. 
 
@@ -638,6 +657,10 @@ arg(FileRef, Indent, Arg) ->
     case Arg of
         {function, FuncName} ->
             function(FileRef, 0, FuncName);
+        {var, StrVar} ->
+            Output = io_lib:format("~s", [StrVar]),
+            gen_output(FileRef, Indent, Output),
+            ok;
         Arg ->                    
             Output = io_lib:format("~w", [Arg]),
             gen_output(FileRef, Indent, Output),

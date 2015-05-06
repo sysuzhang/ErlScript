@@ -3,7 +3,7 @@ Nonterminals
 scripts statements if_statement while_statement function wait_function args arg express conditions condition compare vars arithmetic logic.
 
 %终结符
-Terminals '+' '-' '*' '/' '&&' '||' '!' '>' '<' '==' ';' ',' '(' ')' '{' '}' 'IF' 'ELSE' 'WHILE' 'WAIT' atom integer float var.
+Terminals '+' '-' '*' '/' '=' '&&' '||' '!' '>' '<' '==' ';' ',' '(' ')' '{' '}' 'IF' 'ELSE' 'WHILE' 'WAIT' atom integer float var.
 
 Rootsymbol scripts.
 
@@ -20,6 +20,9 @@ statements -> while_statement : {while_statement, '$1'}.
 statements -> while_statement statements : [{while_statement, '$1', '$2'}].  %%WHILE语句
 statements -> function ';' : [{function, '$1'}].
 statements -> function ';' statements: [{function, '$1'} | '$3'].
+statements -> vars '=' function ';' : {var, '$1', '$3'}.                                    %%支持变量
+statements -> vars  '=' function ';' statements : [{var, '$1', '$3'} | '$5'].
+    
 
 %statements -> statement statements : ['$1' | '$2']. 
 
@@ -57,7 +60,7 @@ args -> '$empty' : [].
 args -> arg : ['$1']. 
 args -> arg ',' args : ['$1'| '$3'].
 
-arg -> var : unwrap('$1').
+arg -> var : {var, unwrap('$1')}.
 arg -> integer : unwrap('$1').
 arg -> atom : unwrap('$1').
 arg -> function : {function, '$1'}.

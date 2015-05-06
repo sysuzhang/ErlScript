@@ -1,11 +1,8 @@
 /*
 测试脚本
 */
-create_monster(); //创建怪物
-create_monster();
-wait(1000); //等待1s
-create_monster(100,200);
-create_monster(200,300);
-wait(2000);
-create_monster(300, 400);
-create_monster(500, 600);
+ 
+T = find_target(200,300);
+create_monster(T, 100,200);
+
+ 
