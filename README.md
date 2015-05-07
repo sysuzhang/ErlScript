@@ -92,5 +92,6 @@ if/while/wait 子句转换成函数，并且成为程序的尾函数，所有函
 </pre>
 
 ## ToDo:
+[Planned] 支持本地函数定义
 [Planned] 扩展使用脚本虚拟机的方法清除阻塞  
 
