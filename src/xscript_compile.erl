@@ -11,18 +11,13 @@
 -export([generate_file/1, generate_file/2]).
 -export([generate_dir/1, generate_dir/2]).
 -export([comment/1]).
+-include("xscript_compile.hrl").
 
 -define(INDENT_SPACE, 4).
 -define(SINGLE_STATEMENT, -1).
 -define(DEFAULT_FUNID , 0).
 -define(DEFAULT_TAILFUNID, 0).
 
--define(DEFAULT_OUTPUT_FILE, "xscript_mod_script").
--define(INCLUDE_FILE, "-include(\"xscript.hrl\").\n\n").
-
-%%函数映射模块
--define(FUNCTION_MAP_MODULE, xscript_function_map).
--define(FUNCTION_MAP_FUNCTION, get_function_map).
 
 %%代码生成保存
 -record(script_source, {scriptid = undefined,
@@ -158,12 +153,13 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
 %%按目录生成
 %%Options: [{key, value}]
 %%
-generate_dir(Dirname, Options) ->
-    case file:list_dir(Dirname) of
+generate_dir(Dirname, Options) ->  
+    case file:list_dir_all(Dirname) of
         {ok, FileList} ->
-            Files = lists:foldr(fun(File, Acc) ->
-                                        case filename:extension(File) of
-                                            ".script" ->
+            Files = lists:foldr(fun(File, Acc) -> 
+                                        FileBin = unicode:characters_to_binary(File),
+                                        case filename:extension(FileBin) of
+                                            <<".script">> ->
                                                 [Dirname ++ File | Acc];
                                             _ ->
                                                 Acc
@@ -622,7 +618,7 @@ express(FileRef, Indent, Express) ->
 function(FileRef, Indent, Statement) ->
     case Statement of
         {func, FuncName, Args} -> 
-            case xscript_function_map:get_function_map(FuncName) of
+            case ?FUNCTION_MAP_MODULE:?FUNCTION_MAP_FUNCTION(FuncName) of
                 {Module, _} ->
                     Output = io_lib:format("~w:~w(", [Module, FuncName]),
                     gen_output(FileRef, Indent, Output),
