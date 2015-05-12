@@ -3,7 +3,7 @@ Nonterminals
 scripts statements if_statement while_statement function wait_function args arg express conditions condition compare vars arithmetic logic.
 
 %终结符
-Terminals '+' '-' '*' '/' '=' '&&' '||' '!' '>' '<' '==' ';' ',' '(' ')' '{' '}' 'IF' 'ELSE' 'WHILE' 'WAIT' atom integer float var.
+Terminals '+' '-' '*' '/' '=' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '{' '}' 'IF' 'ELSE' 'WHILE' 'WAIT' atom integer float var.
 
 Rootsymbol scripts.
 
@@ -80,6 +80,7 @@ logic -> '!' : unwrap('$1').
 compare -> '>' : unwrap('$1').
 compare -> '<' : unwrap('$1').
 compare -> '==' : unwrap('$1').
+compare -> '!=' : unwrap('$1').
 
 %%算术运算符
 arithmetic -> '+' : unwrap('$1').
@@ -90,4 +91,4 @@ arithmetic -> '/' : unwrap('$1').
 
 Erlang code.
 unwrap({_,_,V}) -> V;
-unwrap({V,_}) -> V.
+unwrap({V,_}) -> V. 

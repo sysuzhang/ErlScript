@@ -564,6 +564,9 @@ compare(FileRef, Indent, Compare) ->
             ok;
         '==' ->            
             gen_output(FileRef, Indent, " =:="),
+            ok;   
+        '!=' ->            
+            gen_output(FileRef, Indent, " =/="),
             ok;            
         _ ->
             dd

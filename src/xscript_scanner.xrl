@@ -14,6 +14,8 @@ else : {token, {'ELSE', TokenLine}}.
 while :  {token, {'WHILE', TokenLine}}. 
 wait :  {token, {'WAIT', TokenLine}}. 
 && : {token, {'&&', TokenLine}}. 
+== : {token, {'==', TokenLine}}. 
+!= : {token, {'!=', TokenLine}}. 
 \|\| : {token, {'||', TokenLine}}. 
 ! : {token, {'!', TokenLine}}. 
 {S} : {token, {list_to_atom(TokenChars),TokenLine}}.
