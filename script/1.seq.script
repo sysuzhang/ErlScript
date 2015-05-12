@@ -3,6 +3,9 @@
 */
  
 T = find_target(200,300);
+wait(100);
 create_monster(T, 100,200);
-
- 
+wait(200);
+create_monster(T, 300,400);
+wait(300);
+create_monster(T, 400,500);

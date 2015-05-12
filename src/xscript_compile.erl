@@ -51,18 +51,6 @@ test_one() ->
 test_dir() ->
     generate_dir("./script/", [{out_dir, "./script/"}]).
 
-get_funid() ->
-    case get(script_source) of
-        undefined ->
-            erlang:put(script_source, #script_source{funid = 1}),
-            1;
-        ScriptSource ->
-           #script_source{funid = FunId} = ScriptSource,
-           NewScriptSource = ScriptSource#script_source{funid = FunId + 1},
-           put(script_source, NewScriptSource),
-           FunId + 1
-    end.
-
 generate_file(ProtoFile) ->
   generate_file(ProtoFile,[]).
 
@@ -105,6 +93,7 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
             output_default_funtion(FileRef),
             
             lists:foreach(fun(File) -> 
+                                  erlang:erase(),
                                   ScriptId = rootname(File),
                                   {ok,String} = parse_file(File),   %%词法分析
                                   {ok,FirstParsed} = xscript_parser:parse(String),
@@ -216,8 +205,8 @@ output_source(FileRef, ScriptParse) ->
     ScriptId = get_scriptid(),
     Output = io_lib:format("\nscript_execute(~w, 0) ->\n", [ScriptId]),
     gen_output(FileRef, 0, Output),
-    scripts(FileRef, ?INDENT_SPACE, ScriptParse),   
-    output_functions(),     
+    scripts(FileRef, ?INDENT_SPACE, ScriptParse),  
+    output_functions(),       
     gen_output(FileRef, 0, "\n"), 
      
     ok.
@@ -270,7 +259,8 @@ parse_file(InFile,Acc) ->
 scripts(_FileRef, _Indent, []) -> 
     ok;
 scripts(FileRef, Indent, Statements) ->
-    statements(FileRef, Indent, Statements, ?DEFAULT_FUNID, ?DEFAULT_TAILFUNID),
+    put(funid, ?DEFAULT_FUNID),
+    statements(FileRef, Indent, Statements, ?DEFAULT_FUNID),
     gen_output(FileRef, 0, ";"),   %%脚本结尾
     ok.
 
@@ -290,34 +280,19 @@ output_functions(Fun) ->
         {FunId, FileRef, {while, WhileStatements}} ->
             ScriptId = get_scriptid(),
             StrFun = io_lib:format("\nscript_execute(~w, ~w) ->\n", [ScriptId, FunId]),
-            gen_output(FileRef, 0, StrFun),
-            TailFunId = 
-                case get({func, FunId}) of
-                    undefined ->
-                        ?DEFAULT_TAILFUNID;
-                    TFID ->
-                        TFID
-                end,
-            while_statement(FileRef, ?INDENT_SPACE, WhileStatements, FunId, TailFunId),
+            gen_output(FileRef, 0, StrFun), 
+            while_statement(FileRef, ?INDENT_SPACE, WhileStatements, FunId),
             gen_output(FileRef, 0, ";");   %% Function结束
         {FunId, FileRef, Statements} ->
             ScriptId = get_scriptid(),
             StrFun = io_lib:format("\nscript_execute(~w, ~w) ->\n", [ScriptId, FunId]),
-            gen_output(FileRef, 0, StrFun),
-            TailFunId = 
-                case get({func, FunId}) of
-                    undefined ->
-                        ?DEFAULT_TAILFUNID;
-                    TFID ->
-                        TFID
-                end,
-            statements(FileRef, ?INDENT_SPACE, Statements, FunId, TailFunId),
+            gen_output(FileRef, 0, StrFun), 
+            statements(FileRef, ?INDENT_SPACE, Statements, FunId),
             gen_output(FileRef, 0, ";");  %%statement结束
         _ ->
             next
     end,
     ok.
- 
 
 shift_statement(FileRef, Statements, FunId) ->
     add_function(FileRef, FunId, Statements),
@@ -337,65 +312,76 @@ add_function(FileRef, Funid, Statements) ->
 
 
 %%Statements分析(段落分析)
-statements(FileRef, Indent, Statements, SID, TailFunID) ->
+statements(FileRef, Indent, Statements, FunID) ->
     case Statements of
         [{function, Fun_statement}] ->
             function(FileRef, Indent, Fun_statement),
-            if TailFunID =/= ?DEFAULT_TAILFUNID -> 
-                   gen_output(FileRef, 0, ",\n"),
-                   ScriptId = get_scriptid(),
-                   Str = io_lib:format("script_execute(~w, ~w)", [ScriptId, TailFunID]),
-                   gen_output(FileRef, Indent, Str);
-               true ->
+            case get_tail_funid(FunID) of
+                TailFunID when is_integer(TailFunID) ->
+                    gen_output(FileRef, 0, ",\n"), 
+                    Str = io_lib:format("TailFun~w()", [TailFunID]),
+                    gen_output(FileRef, Indent, Str);
+                undefined ->
                    next
             end;
         [{function, Fun_statement}| OtherStatements] ->
             function(FileRef, Indent, Fun_statement),
             gen_output(FileRef, 0, ",\n"),
-            statements(FileRef, Indent, OtherStatements, SID, TailFunID),
+            statements(FileRef, Indent, OtherStatements, FunID),
             ok;
         {wait_function, Wait_statement} -> 
             wait_statement(FileRef, Indent, Wait_statement, 0), 
             ok;
         [{wait_function, Wait_statement, OtherStatements}] ->
-            NewFunID = get_funid(),  
-            put({level, SID} , NewFunID),
-            put({func, NewFunID}, TailFunID), %%当前尾函数的尾函数
-            wait_statement(FileRef, Indent, Wait_statement, NewFunID), 
-            shift_statement(FileRef, OtherStatements, NewFunID),
+            NewFunID = get_fun_id(),   
+            set_tail_funid(NewFunID, get_tail_funid(FunID)),
+            StrFun = io_lib:format("TailFun~w = \n", [NewFunID]),
+            gen_output(FileRef, Indent, StrFun),
+            StrFun2 = io_lib:format("fun() ->\n", []),
+            gen_output(FileRef, Indent + ?INDENT_SPACE, StrFun2),
+            statements(FileRef, Indent + ?INDENT_SPACE * 2, OtherStatements, NewFunID),            
+            gen_output(FileRef, 0, "\n"),
+            gen_output(FileRef, Indent + ?INDENT_SPACE, "end, \n"),            
+            
+             
+            wait_statement(FileRef, Indent, Wait_statement, NewFunID),  
             ok;
         {if_statement, If_statment} ->
-            NewSID = SID + 1,
-            if_statement(FileRef, Indent, If_statment, NewSID, TailFunID),
+            %NewSID = get_fun_id(), 
+            if_statement(FileRef, Indent, If_statment, FunID),
             ok;
         [{if_statement, If_statement, OtherStatements}] ->
-            NewFunID = get_funid(),   
-            NewSID = SID + 1,
-            put({level, SID}  , NewFunID),  %%当前层的尾函数
-            put({func, NewFunID}, TailFunID), %%当前尾函数的尾函数
-            if_statement(FileRef, Indent, If_statement, NewSID, NewFunID), 
-            shift_statement(FileRef, OtherStatements, NewFunID),
+            NewFunID = get_fun_id(),   
+            set_tail_funid(NewFunID, get_tail_funid(FunID)),
+            StrFun = io_lib:format("TailFun~w = \n", [NewFunID]),
+            gen_output(FileRef, Indent, StrFun),
+            StrFun2 = io_lib:format("fun() ->\n", []),
+            gen_output(FileRef, Indent + ?INDENT_SPACE, StrFun2),
+            statements(FileRef, Indent + ?INDENT_SPACE * 2, OtherStatements, NewFunID),            
+            gen_output(FileRef, 0, "\n"),
+            gen_output(FileRef, Indent + ?INDENT_SPACE, "end, \n"),  
+            
+            
+            %NewFunID2 = get_fun_id(),   
+            set_tail_funid(FunID, NewFunID), %%更新当前FunID的尾函数
+            if_statement(FileRef, Indent, If_statement, FunID),  
             ok;
         {while_statement, WhileStatements} ->
-            NewFunID = get_funid(),
+            NewFunID = get_fun_id(),
             ScriptId = get_scriptid(),
             StrWhile = io_lib:format("script_execute(~w, ~w)", [ScriptId, NewFunID]),
-            gen_output(FileRef, Indent, StrWhile),
-            put({func, NewFunID}, TailFunID),         
+            gen_output(FileRef, Indent, StrWhile),   
             shift_statement(FileRef, {while, WhileStatements}, NewFunID),
             ok;
         [{while_statement, WhileStatements, OtherStatements}] ->
-            
-            NewFunID = get_funid(),
-            put({func, NewFunID}, TailFunID),
-            shift_statement(FileRef, OtherStatements, NewFunID),
-            
-            NewWhileFunID = get_funid(),
+            NewWhileFunID = get_fun_id(),
             ScriptId = get_scriptid(),
-            StrWhile = io_lib:format("script_execute(~w, ~w)", [ScriptId, NewWhileFunID]),
-            gen_output(FileRef, Indent, StrWhile),
-            put({func, NewWhileFunID}, NewFunID),
+            StrWhile = io_lib:format("script_execute(~w, ~w),\n", [ScriptId, NewWhileFunID]),
+            gen_output(FileRef, Indent, StrWhile), 
             shift_statement(FileRef, {while, WhileStatements}, NewWhileFunID),
+            set_tail_funid(NewWhileFunID, get_tail_funid(FunID)), %%设置WHILE子句的尾函数
+             
+            statements(FileRef, Indent, OtherStatements, FunID),
             ok;
         {var, Var, Fun_statement} ->%%支持变量
             StrVar = io_lib:format("~w = ", [Var]),
@@ -407,7 +393,7 @@ statements(FileRef, Indent, Statements, SID, TailFunID) ->
             gen_output(FileRef, Indent, StrVar),
             function(FileRef, 0, Fun_statement),
             gen_output(FileRef, 0, ",\n"),
-            statements(FileRef, Indent, OtherStatements, SID, TailFunID),
+            statements(FileRef, Indent, OtherStatements, FunID),
             ok;
         _ ->
             ok
@@ -417,9 +403,13 @@ wait_statement(FileRef, Indent, WaitStatement, FunId) ->
     case WaitStatement of
         {'WAIT', [Time]} ->
             case ?FUNCTION_MAP_MODULE:?FUNCTION_MAP_FUNCTION (wait) of
-                {Module, _} ->
-                    ScriptId = get_scriptid(),
-                    Output = io_lib:format("~w:~w(~w, ~w, {~w, ~w, ~w})", [Module, wait, Time, ScriptId, Module, FunId, []]),
+                {Module, _} ->                     
+                    Output = 
+                        if FunId =/= undefined ->
+                               io_lib:format("~w:~w(~w, TailFun~w)", [Module, wait, Time, FunId]);
+                           true ->
+                               io_lib:format("~w:~w(~w, undefined)", [Module, wait, Time])
+                        end,
                     gen_output(FileRef, Indent, Output);
                 _ ->
                     throw({"Not Define Function: ~w", [wait]})
@@ -429,7 +419,7 @@ wait_statement(FileRef, Indent, WaitStatement, FunId) ->
     end.
      
 
-if_statement(FileRef, Indent, IfStatement, SID, TailFunID) -> 
+if_statement(FileRef, Indent, IfStatement, FunID) -> 
     case IfStatement of
         {'IF', ConditionsClause, TrueStatements} ->    
             %%是否需要表达式反转
@@ -450,17 +440,17 @@ if_statement(FileRef, Indent, IfStatement, SID, TailFunID) ->
             end,         
             gen_output(FileRef, 0, " of\n"),          
             gen_output(FileRef, Indent + ?INDENT_SPACE, "true ->\n"),    %% true         
-            statements(FileRef, Indent + ?INDENT_SPACE * 2, TrueStatements, SID, TailFunID), 
+            statements(FileRef, Indent + ?INDENT_SPACE * 2, TrueStatements, FunID), 
             gen_output(FileRef, 0, ";\n"),
             
             gen_output(FileRef, Indent + ?INDENT_SPACE, "_ ->\n"),   
             
-            if TailFunID =/= ?DEFAULT_TAILFUNID ->
-                   ScriptId = get_scriptid(),
-                   TailStr = io_lib:format("script_execute(~w, ~w)\n", [ScriptId, TailFunID]),
-                   gen_output(FileRef, Indent + ?INDENT_SPACE * 2, TailStr);
-               true ->
-                   gen_output(FileRef, Indent + ?INDENT_SPACE * 2, "ok\n")
+            case get_tail_funid(FunID) of
+                TailFunID when is_integer(TailFunID) -> 
+                    TailStr = io_lib:format("TailFun~w()\n", [TailFunID]),
+                    gen_output(FileRef, Indent + ?INDENT_SPACE * 2, TailStr);
+                undefined ->
+                    gen_output(FileRef, Indent + ?INDENT_SPACE * 2, "ok\n")
             end,
             gen_output(FileRef, Indent, "end"),
             ok;
@@ -469,10 +459,10 @@ if_statement(FileRef, Indent, IfStatement, SID, TailFunID) ->
             conditions(FileRef, Indent + ?INDENT_SPACE, Conditions),              
             gen_output(FileRef, 0, " of \n"),          
             gen_output(FileRef, Indent + ?INDENT_SPACE, "true ->\n"),    %% true         
-            statements(FileRef, Indent + ?INDENT_SPACE * 2, TrueStatements, SID, TailFunID), 
+            statements(FileRef, Indent + ?INDENT_SPACE * 2, TrueStatements, FunID), 
             gen_output(FileRef, 0, ";\n"),
             gen_output(FileRef, Indent + ?INDENT_SPACE, "false ->\n"),    %% false         
-            statements(FileRef, Indent + ?INDENT_SPACE * 2, FalseStatements, SID, TailFunID),  
+            statements(FileRef, Indent + ?INDENT_SPACE * 2, FalseStatements, FunID),  
             gen_output(FileRef, 0, "\n"),             
             gen_output(FileRef, Indent, "end"),
             ok;
@@ -481,24 +471,24 @@ if_statement(FileRef, Indent, IfStatement, SID, TailFunID) ->
     end,    
     ok.
  
-while_statement(FileRef, Indent, WhileStatements, SID, TailFunID) ->
+while_statement(FileRef, Indent, WhileStatements, FunID) ->
     case WhileStatements of
         {'WHILE', Conditions, Statements} ->
              gen_output(FileRef, Indent, "case \n"), 
              conditions(FileRef, Indent + ?INDENT_SPACE, Conditions),              
              gen_output(FileRef, 0, " of \n"),          
              gen_output(FileRef, Indent + ?INDENT_SPACE, "true ->\n"),    %% true         
-             statements(FileRef, Indent + ?INDENT_SPACE * 2, Statements, SID, SID), 
+             statements(FileRef, Indent + ?INDENT_SPACE * 2, Statements, FunID), 
+             
+             %%循环
+             gen_output(FileRef, 0, ",\n"),
+             ScriptID = get_scriptid(),
+             StrLoop = io_lib:format("script_execute(~w, ~w)", [ScriptID, FunID]),             
+             gen_output(FileRef, Indent + ?INDENT_SPACE * 2, StrLoop),          
              gen_output(FileRef, 0, ";\n"),
              
              gen_output(FileRef, Indent + ?INDENT_SPACE, "_ ->\n"),
-             if TailFunID =/= ?DEFAULT_TAILFUNID ->
-                    ScriptId = get_scriptid(),
-                    TailStr = io_lib:format("script_execute(~w, ~w)\n", [ScriptId, TailFunID]),
-                    gen_output(FileRef, Indent + ?INDENT_SPACE * 2, TailStr);
-               true ->
-                    gen_output(FileRef, Indent + ?INDENT_SPACE * 2, "ok\n")
-             end,
+             gen_output(FileRef, Indent + ?INDENT_SPACE * 2, "ok\n"),
              gen_output(FileRef, Indent, "end"),
              ok;
         _ ->
@@ -673,3 +663,25 @@ indent(FileRef, IndentNum) ->
                         xscript_file:format(FileRef, "~s", [" "]),
                         _Acc
                  end, ok, lists:seq(1, IndentNum)).
+
+get_fun_id() ->
+    case get(funid) of
+        undefined ->
+            put(funid, 1),
+            1;
+        Id ->
+            NewId = Id + 1,
+            put(funid, NewId),
+            NewId
+    end.
+
+get_tail_funid(FunId) ->
+    case get({tail_funid, FunId}) of
+        undefined ->
+            undefined;
+        TailFunId ->
+            TailFunId
+    end.
+
+set_tail_funid(FunId, TailFunId) ->
+    put({tail_funid, FunId}, TailFunId).

@@ -6,8 +6,6 @@ moverandom();
 if(level() > 3)
 {
       apply(1,skill,1204); //使用技能
-      wait(100);
-      find_target(300,222,12);
 }
 else
 {
