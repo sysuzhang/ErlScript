@@ -50,6 +50,7 @@ condition -> function compare condition: {function, '$1', '$2', '$3'}.
 
 %%表达式
 express -> vars : {vars, '$1'}.
+express -> atom : {atom, unwrap('$1')}.
 express -> vars arithmetic express : {'$1', '$2', '$3'}.
 
 %%函数

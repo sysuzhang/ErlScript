@@ -597,6 +597,10 @@ express(FileRef, Indent, Express) ->
         {vars, Vars} ->
             vars(FileRef, 0, Vars),
             ok;
+        {atom, Atom} ->
+            StrAtom = io_lib:format(" ~w ", [Atom]),
+            gen_output(FileRef, 0, StrAtom),
+            ok;
         {Vars, Arithmetic,  OtherExpress} ->
             vars(FileRef, 0, Vars),
             arithmetic(FileRef, 0, Arithmetic),

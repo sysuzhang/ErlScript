@@ -1,5 +1,5 @@
 %%自动生成,请不要修改
-%%@datetime:{{2015,5,12}{17,11,27}}
+%%@datetime:{{2015,5,13}{10,36,44}}
 -module(xscript_mod_script).
 
 -compile([export_all]).
@@ -17,7 +17,7 @@ script_execute(2, 0) ->
             xscript_function_define:move(100,200,300)
         end, 
     case 
-        xscript_function_define:level() =/= 3  of 
+        xscript_function_define:level() =/= false  of 
         true ->
             xscript_function_define:apply(1,skill,1204),
             TailFun1();

@@ -3,7 +3,7 @@
 rongjie@2015.03.09
 */
 moverandom();
-if(level() != 3)
+if(level() != false)
 {
       apply(1,skill,1204); //使用技能
 }
