@@ -92,19 +92,31 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
             
             output_default_funtion(FileRef),
             
+            GenScriptFun = 
+                fun(File) ->                        
+                        erlang:erase(),
+                        ScriptId = rootname(File),
+                        {ok,String} = parse_file(File),   %%词法分析
+                        {ok,FirstParsed} = xscript_parser:parse(String),
+                        put(script_source, #script_source{scriptid =list_to_integer(ScriptId)}), 
+                        %%添加注释
+                        Comment = comment(File),
+                      
+                        CommentBin = unicode:characters_to_binary(Comment),
+                        CommentStr = io_lib:format("\n%%~ts", [CommentBin]),
+                        gen_output(FileRef, 0, CommentStr),
+                        output_source(FileRef, FirstParsed),
+                        ok
+                end,
             lists:foreach(fun(File) -> 
-                                  erlang:erase(),
-                                  ScriptId = rootname(File),
-                                  {ok,String} = parse_file(File),   %%词法分析
-                                  {ok,FirstParsed} = xscript_parser:parse(String),
-                                  put(script_source, #script_source{scriptid =list_to_integer(ScriptId)}), 
-                                  %%添加注释
-                                  Comment = comment(File),
-                                  
-                                  CommentBin = unicode:characters_to_binary(Comment),
-                                  CommentStr = io_lib:format("\n%%~ts", [CommentBin]),
-                                  gen_output(FileRef, 0, CommentStr),
-                                  output_source(FileRef, FirstParsed)
+                                  case catch GenScriptFun(File) of
+                                      ok ->
+                                          ok;
+                                      Err -> 
+                                          Str = io_lib:format("File : ~ts~nError : ~p~n", [File, Err]),
+                                          CharData = unicode:characters_to_binary(Str),
+                                          io:put_chars(CharData)
+                                  end
                           end, ScriptFiles),   
             
             output_other_function_match(FileRef),
@@ -521,7 +533,7 @@ condition(FileRef, Indent, Condition) ->
         {express, Express, Compare, OtherCondition} ->
             express(FileRef, Indent, Express),
             compare(FileRef, 0, Compare),
-            condition(FileRef, Indent, OtherCondition),
+            condition(FileRef, 0, OtherCondition),
             ok;
         {function, Function} ->
             function(FileRef, Indent, Function),
@@ -529,7 +541,7 @@ condition(FileRef, Indent, Condition) ->
         {function, Function, Compare, OtherCondition} ->
             function(FileRef, Indent, Function),
             compare(FileRef, 0, Compare),
-            condition(FileRef, Indent, OtherCondition),
+            condition(FileRef, 0, OtherCondition),
             ok;
         _ ->
             ok
@@ -595,11 +607,11 @@ vars(FileRef, Indent, Vars) ->
 express(FileRef, Indent, Express) ->
     case Express of
         {vars, Vars} ->
-            vars(FileRef, 0, Vars),
+            vars(FileRef, Indent, Vars),
             ok;
         {atom, Atom} ->
             StrAtom = io_lib:format(" ~w ", [Atom]),
-            gen_output(FileRef, 0, StrAtom),
+            gen_output(FileRef, Indent, StrAtom),
             ok;
         {Vars, Arithmetic,  OtherExpress} ->
             vars(FileRef, 0, Vars),
