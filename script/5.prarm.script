@@ -1,3 +1,11 @@
--script([SkillID, ObjectKey, Pos]).
-ok = find_target(100);
-T = attack_target();
+-script([SKillID, ObjectKey, Pos]).
+if(check_apply_skill(SKillID, ObjectKey) == true)
+{
+    notify_effect();
+    wait(3000);
+    attack_target(ObjectKey);
+}
+else
+{
+    throw(error);
+}

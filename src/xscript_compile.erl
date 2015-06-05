@@ -36,7 +36,8 @@
                         comment = [],
                         function = [],   %%参数
                         body = [],    %%函数体
-                        functions = []
+                        functions = [],
+                        tailfun = dict:new()
                         }).
 
 
@@ -107,6 +108,7 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
             GenScriptFun = 
                 fun(File) ->               
                         erlang:erase(cur_scriptid),  
+                        erlang:erase(script_source),
                         
                         ScriptId = rootname(File),
                         put(cur_scriptid, list_to_integer(ScriptId)),%%设置当前处理的Script
@@ -905,13 +907,34 @@ get_fun_id() ->
             NewId
     end.
 
-get_tail_funid(FunId) ->
-    case get({tail_funid, FunId}) of
-        undefined ->
-            undefined;
-        TailFunId ->
-            TailFunId
+get_tail_funid(FunId) -> 
+    CurScriptID = get_cur_scriptid(),
+    ScriptFile = get(script_file),
+    #script_file{sources = OrddictSources} = ScriptFile,
+    case orddict:find(CurScriptID, OrddictSources) of
+        {ok, #script_source{tailfun = TailFunDict}} ->            
+            case dict:find(FunId, TailFunDict) of
+                {ok, TailFunId} ->
+                    TailFunId;
+                error ->
+                    undefined
+            end;
+        _ ->
+           undefined
     end.
 
 set_tail_funid(FunId, TailFunId) ->
-    put({tail_funid, FunId}, TailFunId).
+    CurScriptID = get_cur_scriptid(),
+    ScriptFile = get(script_file),
+    #script_file{sources = OrddictSources} = ScriptFile,
+    case orddict:find(CurScriptID, OrddictSources) of
+        {ok, #script_source{tailfun = TailFunDict} = ScriptSource} ->  
+            NewTailFunDict = dict:store(FunId, TailFunId, TailFunDict),
+            NewScriptSource = ScriptSource#script_source{tailfun = NewTailFunDict},
+            NewOrddictSource = orddict:store(CurScriptID, NewScriptSource, OrddictSources),
+            NewScriptFile = ScriptFile#script_file{sources = NewOrddictSource},
+            put(script_file, NewScriptFile);
+        _ ->
+           undefined
+    end.
+ 
