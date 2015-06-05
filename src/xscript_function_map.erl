@@ -23,6 +23,9 @@
 ?DEFINE_FUN_MAP(wait, xscript_function_define);
 ?DEFINE_FUN_MAP(moverandom, xscript_function_define);
 ?DEFINE_FUN_MAP(move, xscript_function_define);
+?DEFINE_FUN_MAP(check_apply_skill, xscript_function_define);
+?DEFINE_FUN_MAP(notify_effect, xscript_function_define);
+?DEFINE_FUN_MAP(throw, xscript_function_define); 
 get_function_map(_Function) -> 
     unknow.
 

@@ -11,6 +11,7 @@
 -export([generate_file/1, generate_file/2]).
 -export([generate_dir/1, generate_dir/2]).
 -export([comment/1]).
+-export([test1/0, test2/0, test3/0, test4/0, test5/0]).
 -include("xscript_compile.hrl").
 
 -define(INDENT_SPACE, 4).
@@ -20,10 +21,22 @@
 
 
 %%代码生成保存
--record(script_source, {scriptid = undefined,
-                        functions = [],
-                        main = [],
-                        funid = 0
+-record(script_file, {sources = orddict:new(),
+                      header = [],  %%Header代码
+                      include = [], %%include代码
+                      default_function = [],
+                      default_match = [],
+                      loop_function = []
+                      }).
+
+%%每个代码文件
+-record(script_source, {scriptid = 0,
+                        funid = 0,
+                        param = [],
+                        comment = [],
+                        function = [],   %%参数
+                        body = [],    %%函数体
+                        functions = []
                         }).
 
 
@@ -44,6 +57,8 @@ test3() ->
     generate_file("./script/3.loop.script", [{out_dir, "./script/"}]).
 test4() ->
     generate_file("./script/4.测试.script", [{out_dir, "./script/"}]).
+test5() ->
+    generate_file("./script/5.prarm.script", [{out_dir, "./script/"}]).
 
 test_one() ->
     generate_files(["./script/1.seq.script", "./script/2.if.script", "./script/3.loop.script"], [{out_dir, "./script/"}]).
@@ -61,7 +76,8 @@ get_output_filename(Options) ->
 %%{out_dir, OutDir} : 输出目录
 generate_file(ScriptFile, Options) ->
     generate_files([ScriptFile], Options).
-generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->    
+generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
+    erlang:erase(),
     {IsAllInOne, OutputOneFileName} =
         case proplists:get_value(one_output, Options) of 
             true ->
@@ -71,6 +87,8 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
             _ ->
                 {true, get_output_filename(Options)}
         end,
+    
+    put(script_file, #script_file{}),
     
     case IsAllInOne of
         true ->            
@@ -84,28 +102,23 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
                         filename:dirname(Dir)
                 end,
             
-            OutputFile = OutDir ++ "/" ++ OutputOneFileName ++ ".erl",
-            
-            {ok, FileRef} = xscript_file:open(OutputFile, [write]),    
-            output_header(FileRef, OutputOneFileName),
-            output_include(FileRef),
-            
-            output_default_funtion(FileRef),
+            OutputFile = OutDir ++ "/" ++ OutputOneFileName ++ ".erl",            
             
             GenScriptFun = 
-                fun(File) ->                        
-                        erlang:erase(),
+                fun(File) ->               
+                        erlang:erase(cur_scriptid),  
+                        
                         ScriptId = rootname(File),
+                        put(cur_scriptid, list_to_integer(ScriptId)),%%设置当前处理的Script
+                        
                         {ok,String} = parse_file(File),   %%词法分析
-                        {ok,FirstParsed} = xscript_parser:parse(String),
-                        put(script_source, #script_source{scriptid =list_to_integer(ScriptId)}), 
-                        %%添加注释
-                        Comment = comment(File),
-                      
-                        CommentBin = unicode:characters_to_binary(Comment),
-                        CommentStr = io_lib:format("\n%%~ts", [CommentBin]),
-                        gen_output(FileRef, 0, CommentStr),
-                        output_source(FileRef, FirstParsed),
+                        {ok,FirstParsed} = xscript_parser:parse(String), %%语法分析,得到语法树
+                                               
+                        
+                        generate_commnet(File),  %%生成注释
+
+                        generate_source(FirstParsed),  %%分析语法树,生成目标代码
+                        generate_script_execute(), %%生成函数头
                         ok
                 end,
             lists:foreach(fun(File) -> 
@@ -117,14 +130,21 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
                                           CharData = unicode:characters_to_binary(Str),
                                           io:put_chars(CharData)
                                   end
-                          end, ScriptFiles),   
+                          end, ScriptFiles),       
+             
+            generate_default_funtion(),
+            generate_include(),            
+            generate_header(OutputOneFileName),
             
-            output_other_function_match(FileRef),
-            xscript_file:close(FileRef),
+            output_other_script_match(),%%通用匹配 
+            generate_loop_fun(),
+            
+            write_to_file(OutputFile),
             ok;
         false ->
             %%每个脚本对应一个独立的文件
-            lists:foreach(fun(File) -> 
+            lists:foreach(fun(File) ->          
+                                  erlang:erase(),
                                   OutDir =   
                                       case proplists:get_value(out_dir, Options) of
                                           undefined ->
@@ -138,17 +158,74 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
                                   filelib:ensure_dir(OutputFile),
                                   
                                   {ok, FileRef} = xscript_file:open(OutputFile, [write]),    
-                                  output_header(FileRef, Basename),
+                                  generate_header(Basename),
                                   
                                   {ok,String} = parse_file(File),   %%词法分析
                                   {ok,FirstParsed} = xscript_parser:parse(String),
                                   put(script_source, #script_source{scriptid =ScriptId}), 
-                                  output_source(FileRef, FirstParsed),
+                                  generate_source(FirstParsed),
                                   xscript_file:close(FileRef)
                           end, ScriptFiles), 
             ok
     end,
      
+    ok.
+
+write_to_file(OutputFile) ->
+    {ok, FileRef} = xscript_file:open(OutputFile, [write]),      
+    %%输出
+    case get(script_file) of
+        #script_file{sources = OrddictSource, header = HeaderList, include = IncludeList,
+                     default_function = DefaultFuntionList, default_match = DefaultMatch, loop_function = LoopFuntions} -> 
+            lists:foldr(fun({Indent, OutStr}, Acc) ->
+                                gen_output(FileRef, Indent, OutStr),
+                                Acc
+                        end, ok, HeaderList),
+            lists:foldr(fun({Indent, OutStr}, Acc) ->
+                                gen_output(FileRef, Indent, OutStr),
+                                Acc
+                        end, ok, IncludeList),
+            lists:foldr(fun({Indent, OutStr}, Acc) ->
+                                gen_output(FileRef, Indent, OutStr),
+                                Acc
+                        end, ok, DefaultFuntionList),
+            
+            %%输出脚本函数代码
+            SourceList = orddict:to_list(OrddictSource),            
+            lists:foldr(fun({ScriptID, #script_source{comment = Comment, function = Function, body = Body}}, Acc) ->
+                                
+                                lists:foldr(fun({Indent, OutStr}, Acc1) ->
+                                                    gen_output(FileRef, Indent, OutStr),
+                                                    Acc1
+                                            end, ok, Comment),
+                                
+                                lists:foldr(fun({Indent, OutStr}, Acc1) ->
+                                                    gen_output(FileRef, Indent, OutStr),
+                                                    Acc1
+                                            end, ok, Function),
+                                
+                                lists:foldr(fun({Indent, OutStr}, Acc1) ->
+                                                    gen_output(FileRef, Indent, OutStr),
+                                                    Acc1
+                                            end, ok, Body),                                
+                                
+                                Acc
+                        end, ok, SourceList),
+            
+            lists:foldr(fun({Indent, OutStr}, Acc) ->
+                                gen_output(FileRef, Indent, OutStr),
+                                Acc
+                        end, ok, DefaultMatch),
+        
+            lists:foldr(fun({Indent, OutStr}, Acc) ->
+                                gen_output(FileRef, Indent, OutStr),
+                                Acc
+                        end, ok, LoopFuntions);
+        _ ->
+            none
+    end, 
+    
+    xscript_file:close(FileRef),
     ok.
  
 %%按目录生成
@@ -190,6 +267,14 @@ rootname(Filename) ->
             rootname(Rootname)
     end.
 
+set_script_id(ScriptId) ->
+    case get(script_source) of
+        #script_source{} = ScriptSource ->
+            put(script_source, ScriptSource#script_source{scriptid = ScriptId});
+        _ ->
+            put(script_source, #script_source{scriptid = ScriptId})
+    end.
+
 %%获得文件名包含的注释
 comment(Filename) ->    
     try 
@@ -213,41 +298,115 @@ get_scriptid() ->
     end.
         
 
-output_source(FileRef, ScriptParse) ->
-    ScriptId = get_scriptid(),
-    Output = io_lib:format("\nscript_execute(~w, 0) ->\n", [ScriptId]),
-    gen_output(FileRef, 0, Output),
-    scripts(FileRef, ?INDENT_SPACE, ScriptParse),  
-    output_functions(),       
-    gen_output(FileRef, 0, "\n"), 
-     
+generate_source(ScriptParse) -> 
+    scripts(?INDENT_SPACE, ScriptParse),     
     ok.
 
-output_header(FileRef, Module) ->
+generate_script_execute() ->
+    case get(script_file) of
+        #script_file{sources = OrddictSources} -> 
+            ScriptID = get_cur_scriptid(),
+            ParamList = 
+                case orddict:find(ScriptID, OrddictSources) of
+                    {ok, #script_source{param = [{_, Param}]}} ->
+                        Param;
+                    _ ->
+                        []
+                end, 
+            ArgsStr = 
+                lists:foldr(fun(Param, Acc) ->
+                                    case Acc of
+                                        [] ->
+                                            [Param];
+                                        _ ->
+                                            [Param, ","|Acc]                                    
+                                    end
+                            end, [], ParamList),
+            NewArgsStr = lists:concat(ArgsStr),
+            Output = io_lib:format("\nscript_execute(~w, 0, [~s]) ->\n", [ScriptID, NewArgsStr]),
+            add_script_source_element(0, Output, #script_source.function), 
+            ok;
+        _ ->
+            none
+    end,   
+    ok.
+
+generate_commnet(File) ->    
+    %%添加注释
+    Comment = comment(File),  
+    CommentBin = unicode:characters_to_binary(Comment),
+    CommentStr = io_lib:format("\n%%~ts", [CommentBin]),
+    add_script_source_element(0, CommentStr, #script_source.comment), 
+    ok.
+
+output_functions() ->
+    case get(script_source) of 
+        #script_source{functions = FunList} = ScriptSource->
+            %put(script_source, ScriptSource#script_source{functions = OtherFun}),
+            [output_functions(Fun) || Fun <- FunList],
+            ok;
+        _ ->
+            next
+    end,
+    ok.
+
+output_functions(Fun) ->
+    case Fun of
+        {FunId, {while, WhileStatements}} ->
+            ScriptId = get_scriptid(),
+            StrFun = io_lib:format("\nscript_loop(~w, ~w) ->\n", [ScriptId, FunId]),
+            add_body(0, StrFun), 
+            while_statement(?INDENT_SPACE, WhileStatements),
+            add_body(0, ";");   %% Function结束 
+        _ ->
+            next
+    end,
+    ok.
+
+generate_header(Module) ->
     Header = io_lib:format("%%自动生成,请不要修改\n%%@datetime:{~w~w}\n-module(~s).\n\n-compile([export_all]).\n\n", 
                            [erlang:date(), erlang:time(), Module]), 
-    gen_output(FileRef, 0, Header),
+    add_script_file_element(0, Header, #script_file.header),
     ok.
 
-output_include(FileRef) ->
+generate_include() ->
     IncludeStr = io_lib:format(?INCLUDE_FILE, []),
-    gen_output(FileRef, 0, IncludeStr).
+    add_script_file_element(0, IncludeStr, #script_file.include).
     
 
-output_default_funtion(FileRef) ->
+generate_default_funtion() ->
     FunStr = io_lib:format("script_execute(ScriptId) ->\n", []), 
-    gen_output(FileRef, 0, FunStr),
-    FunBodyStr = io_lib:format("script_execute(ScriptId, 0).\n", []),
-    gen_output(FileRef, ?INDENT_SPACE, FunBodyStr),
+    add_script_file_element(0, FunStr, #script_file.default_function),
+    FunBodyStr = io_lib:format("script_execute(ScriptId, 0, []).\n", []),
+    add_script_file_element(?INDENT_SPACE, FunBodyStr, #script_file.default_function),
+    
+    FunStr2 = io_lib:format("script_execute(ScriptId, Args) ->\n", []), 
+    add_script_file_element(0, FunStr2, #script_file.default_function),
+    FunBodyStr2 = io_lib:format("script_execute(ScriptId, 0, Args).\n", []),
+    add_script_file_element(?INDENT_SPACE, FunBodyStr2, #script_file.default_function),
     ok.
 
-output_other_function_match(FileRef) ->
-    FunStr = io_lib:format("script_execute(ScriptId, FunId) ->\n", []), 
-    gen_output(FileRef, 0, FunStr),
-    FunBodyStr = io_lib:format("?LOG_DEBUG(\"Not Defined ScriptId: ~cw, FunId:~cw\", [ScriptId, FunId]).\n", [$~, $~]),
-    gen_output(FileRef, ?INDENT_SPACE, FunBodyStr),
-    ok.
+generate_loop_fun() ->
+    FunStr =         "
+script_loop(CondFun, LoopFun) ->
+    case CondFun() of
+        true ->
+            LoopFun(),
+            script_loop(CondFun, LoopFun);
+        false ->
+            ok
+    end.
+",
+     add_script_file_element(0, FunStr, #script_file.loop_function),
+     ok.
 
+output_other_script_match() ->
+    FunStr = io_lib:format("script_execute(ScriptId, FunId, Args) ->\n", []), 
+    add_script_file_element(0, FunStr, #script_file.default_match),
+    FunBodyStr = io_lib:format("?LOG_DEBUG(\"Not Defined ScriptId: ~cw, FunId:~cw, Args:~cw\", [ScriptId, FunId, Args]).\n", [$~, $~, $~]),
+    add_script_file_element(?INDENT_SPACE, FunBodyStr, #script_file.default_match),
+    ok.
+ 
 
 parse_file(FileName) ->
     {ok, InFile} = xscript_file:open(FileName, [read]),
@@ -268,150 +427,123 @@ parse_file(InFile,Acc) ->
  
 
 %%语法规则解析, 对应语法分析器
-scripts(_FileRef, _Indent, []) -> 
-    ok;
-scripts(FileRef, Indent, Statements) ->
+ 
+scripts(Indent, Statements) ->
     put(funid, ?DEFAULT_FUNID),
-    statements(FileRef, Indent, Statements, ?DEFAULT_FUNID),
-    gen_output(FileRef, 0, ";"),   %%脚本结尾
+    statements(Indent, Statements, ?DEFAULT_FUNID),
+    add_body(0, ";\n"),
     ok.
-
-output_functions() ->
-    case get(script_source) of 
-        #script_source{functions = [Fun|OtherFun]} = ScriptSource->
-            put(script_source, ScriptSource#script_source{functions = OtherFun}),
-            output_functions(Fun),
-            output_functions();
-        _ ->
-            next
-    end,
-    ok.
-
-output_functions(Fun) ->
-    case Fun of
-        {FunId, FileRef, {while, WhileStatements}} ->
-            ScriptId = get_scriptid(),
-            StrFun = io_lib:format("\nscript_execute(~w, ~w) ->\n", [ScriptId, FunId]),
-            gen_output(FileRef, 0, StrFun), 
-            while_statement(FileRef, ?INDENT_SPACE, WhileStatements, FunId),
-            gen_output(FileRef, 0, ";");   %% Function结束
-        {FunId, FileRef, Statements} ->
-            ScriptId = get_scriptid(),
-            StrFun = io_lib:format("\nscript_execute(~w, ~w) ->\n", [ScriptId, FunId]),
-            gen_output(FileRef, 0, StrFun), 
-            statements(FileRef, ?INDENT_SPACE, Statements, FunId),
-            gen_output(FileRef, 0, ";");  %%statement结束
-        _ ->
-            next
-    end,
-    ok.
-
-shift_statement(FileRef, Statements, FunId) ->
-    add_function(FileRef, FunId, Statements),
-    ok.
-
-add_function(FileRef, Funid, Statements) ->
-    case get(script_source) of
-        undefined ->
-            erlang:put(script_source, #script_source{functions = [{Funid, FileRef, Statements}]}),
-            ok;
-        ScriptSource ->
-            #script_source{functions = Funs} = ScriptSource,
-            NewScriptSource = ScriptSource#script_source{functions =[{Funid, FileRef, Statements} | Funs]},
-            put(script_source, NewScriptSource),
-            ok
-    end.
-
+  
 
 %%Statements分析(段落分析)
-statements(FileRef, Indent, Statements, FunID) ->
+statements(Indent, [], FunID) -> 
+%%     case get_tail_funid(FunID) of
+%%         TailFunID when is_integer(TailFunID) -> 
+%%             %add_body(0, ",\n"),
+%%             TailStr = io_lib:format("TailFun~w()", [TailFunID]),
+%%             add_body(Indent, TailStr);
+%%         undefined ->
+%%             %add_body(Indent , "ok"),
+%%             ok
+%%     end,
+    ok;
+statements(Indent, Statements, FunID) ->
     case Statements of
-        [{function, Fun_statement}] ->
-            function(FileRef, Indent, Fun_statement),
-            case get_tail_funid(FunID) of
-                TailFunID when is_integer(TailFunID) ->
-                    gen_output(FileRef, 0, ",\n"), 
-                    Str = io_lib:format("TailFun~w()", [TailFunID]),
-                    gen_output(FileRef, Indent, Str);
-                undefined ->
-                   next
-            end;
-        [{function, Fun_statement}| OtherStatements] ->
-            function(FileRef, Indent, Fun_statement),
-            gen_output(FileRef, 0, ",\n"),
-            statements(FileRef, Indent, OtherStatements, FunID),
-            ok;
-        {wait_function, Wait_statement} -> 
-            wait_statement(FileRef, Indent, Wait_statement, 0), 
-            ok;
+        [{metascript, MetaScript} | OtherStatements] ->
+            %%参数生成
+            metascript(MetaScript),
+            statements(Indent, OtherStatements, FunID);
+        [{statement, Statement} | OtherStatements] ->
+            statement(Indent, Statement, FunID),
+            case OtherStatements of
+                [] ->
+                    case get_tail_funid(FunID) of
+                        TailFunID when is_integer(TailFunID) -> 
+                            add_body(0, ",\n"),
+                            TailStr = io_lib:format("TailFun~w()", [TailFunID]),
+                            add_body(Indent, TailStr);
+                        undefined ->
+                            %add_body(Indent , "ok"),
+                            ok
+                    end,
+                    none;
+                _ ->
+                    add_body(0, ",\n")
+            end,                    
+            statements(Indent, OtherStatements, FunID); 
         [{wait_function, Wait_statement, OtherStatements}] ->
             NewFunID = get_fun_id(),   
             set_tail_funid(NewFunID, get_tail_funid(FunID)),
             StrFun = io_lib:format("TailFun~w = \n", [NewFunID]),
-            gen_output(FileRef, Indent, StrFun),
-            StrFun2 = io_lib:format("fun() ->\n", []),
-            gen_output(FileRef, Indent + ?INDENT_SPACE, StrFun2),
-            statements(FileRef, Indent + ?INDENT_SPACE * 2, OtherStatements, NewFunID),            
-            gen_output(FileRef, 0, "\n"),
-            gen_output(FileRef, Indent + ?INDENT_SPACE, "end, \n"),            
+            add_body(Indent, StrFun),
             
-             
-            wait_statement(FileRef, Indent, Wait_statement, NewFunID),  
-            ok;
-        {if_statement, If_statment} ->
-            %NewSID = get_fun_id(), 
-            if_statement(FileRef, Indent, If_statment, FunID),
+            StrFun2 = io_lib:format("fun() ->\n", []),
+            add_body(Indent + ?INDENT_SPACE, StrFun2),
+            statements(Indent + ?INDENT_SPACE * 2, OtherStatements, NewFunID),            
+            add_body(0, "\n"),
+            add_body(Indent + ?INDENT_SPACE, "end, \n"),                   
+            wait_statement(Indent, Wait_statement, NewFunID),  
+            ok; 
+        [{if_statement, If_statement, []}] ->
+            if_statement(Indent, If_statement, FunID),
             ok;
         [{if_statement, If_statement, OtherStatements}] ->
             NewFunID = get_fun_id(),   
             set_tail_funid(NewFunID, get_tail_funid(FunID)),
             StrFun = io_lib:format("TailFun~w = \n", [NewFunID]),
-            gen_output(FileRef, Indent, StrFun),
+            add_body(Indent, StrFun),
             StrFun2 = io_lib:format("fun() ->\n", []),
-            gen_output(FileRef, Indent + ?INDENT_SPACE, StrFun2),
-            statements(FileRef, Indent + ?INDENT_SPACE * 2, OtherStatements, NewFunID),            
-            gen_output(FileRef, 0, "\n"),
-            gen_output(FileRef, Indent + ?INDENT_SPACE, "end, \n"),  
+            add_body(Indent + ?INDENT_SPACE, StrFun2),
+            statements(Indent + ?INDENT_SPACE * 2, OtherStatements, NewFunID),            
+            add_body(0, "\n"),
+            add_body(Indent + ?INDENT_SPACE, "end, \n"),  
             
             
             %NewFunID2 = get_fun_id(),   
             set_tail_funid(FunID, NewFunID), %%更新当前FunID的尾函数
-            if_statement(FileRef, Indent, If_statement, FunID),  
+            if_statement(Indent, If_statement, FunID),  
+            ok; 
+        [{while_statement, WhileStatements, []}] -> 
+            {ok, CondFunID, LoopFunID} = while_statement(Indent, WhileStatements),
+            StrWhile = io_lib:format("script_loop(CondFun~w, LoopFun~w)", [CondFunID, LoopFunID]),
+            add_body(Indent + ?INDENT_SPACE, StrWhile),    
             ok;
-        {while_statement, WhileStatements} ->
-            NewFunID = get_fun_id(),
-            ScriptId = get_scriptid(),
-            StrWhile = io_lib:format("script_execute(~w, ~w)", [ScriptId, NewFunID]),
-            gen_output(FileRef, Indent, StrWhile),   
-            shift_statement(FileRef, {while, WhileStatements}, NewFunID),
-            ok;
-        [{while_statement, WhileStatements, OtherStatements}] ->
-            NewWhileFunID = get_fun_id(),
-            ScriptId = get_scriptid(),
-            StrWhile = io_lib:format("script_execute(~w, ~w),\n", [ScriptId, NewWhileFunID]),
-            gen_output(FileRef, Indent, StrWhile), 
-            shift_statement(FileRef, {while, WhileStatements}, NewWhileFunID),
-            set_tail_funid(NewWhileFunID, get_tail_funid(FunID)), %%设置WHILE子句的尾函数
-             
-            statements(FileRef, Indent, OtherStatements, FunID),
-            ok;
-        {var, Var, Fun_statement} ->%%支持变量
-            StrVar = io_lib:format("~w = ", [Var]),
-            gen_output(FileRef, Indent, StrVar),
-            function(FileRef, Indent, Fun_statement),
-            ok;
-        [{var, Var, Fun_statement} | OtherStatements] ->
-            StrVar = io_lib:format("~s = ", [Var]),
-            gen_output(FileRef, Indent, StrVar),
-            function(FileRef, 0, Fun_statement),
-            gen_output(FileRef, 0, ",\n"),
-            statements(FileRef, Indent, OtherStatements, FunID),
-            ok;
+        [{while_statement, WhileStatements, OtherStatements}] -> 
+            {ok, CondFunID, LoopFunID} = while_statement(Indent, WhileStatements),
+            StrWhile = io_lib:format("script_loop(CondFun~w, LoopFun~w),\n", [CondFunID, LoopFunID]),
+            add_body(Indent + ?INDENT_SPACE, StrWhile),  
+            statements(Indent, OtherStatements, FunID),
+            ok; 
         _ ->
             ok
     end.
+
+metascript(MetaScript) ->
+    case MetaScript of
+        {param, ParamList} ->
+            Params = [Param || {_, Param} <- ParamList],
+            add_script_source_element(0, Params, #script_source.param);
+        _ ->
+            none
+    end,
+    ok.
+
+statement(Indent, Statement, FunID) ->
+    case Statement of
+        {express, Express} ->
+            express(Indent, Express);
+        {assignment, Var, Express} ->
+            AssignStr = io_lib:format("~s = ", [Var]),
+            add_body(Indent, AssignStr),
+            express(0, Express);
+        {assert, Atom, Express} ->
+            AssignStr = io_lib:format("~w = ", [Atom]),
+            add_body(Indent, AssignStr),
+            express(0, Express)
+    end,
+    ok.
     
-wait_statement(FileRef, Indent, WaitStatement, FunId) ->
+wait_statement(Indent, WaitStatement, FunId) ->
     case WaitStatement of
         {'WAIT', [Time]} ->
             case ?FUNCTION_MAP_MODULE:?FUNCTION_MAP_FUNCTION (wait) of
@@ -422,7 +554,7 @@ wait_statement(FileRef, Indent, WaitStatement, FunId) ->
                            true ->
                                io_lib:format("~w:~w(~w, undefined)", [Module, wait, Time])
                         end,
-                    gen_output(FileRef, Indent, Output);
+                    add_body(Indent, Output);
                 _ ->
                     throw({"Not Define Function: ~w", [wait]})
             end;
@@ -431,7 +563,7 @@ wait_statement(FileRef, Indent, WaitStatement, FunId) ->
     end.
      
 
-if_statement(FileRef, Indent, IfStatement, FunID) -> 
+if_statement(Indent, IfStatement, FunID) -> 
     case IfStatement of
         {'IF', ConditionsClause, TrueStatements} ->    
             %%是否需要表达式反转
@@ -443,105 +575,121 @@ if_statement(FileRef, Indent, IfStatement, FunID) ->
                         {false, ConditionsClause}
                 end,
             if IsReverse ->
-                   gen_output(FileRef, Indent, "case not (\n"), 
-                   conditions(FileRef, Indent + ?INDENT_SPACE, Conditions),
-                   gen_output(FileRef, 0, " )");
+                   add_body(Indent, "case not (\n"), 
+                   conditions(Indent + ?INDENT_SPACE, Conditions),
+                   add_body(0, " )");
                true ->
-                   gen_output(FileRef, Indent, "case \n"), 
-                   conditions(FileRef, Indent + ?INDENT_SPACE, Conditions)
+                   add_body(Indent, "case \n"), 
+                   conditions(Indent + ?INDENT_SPACE, Conditions)
             end,         
-            gen_output(FileRef, 0, " of\n"),          
-            gen_output(FileRef, Indent + ?INDENT_SPACE, "true ->\n"),    %% true         
-            statements(FileRef, Indent + ?INDENT_SPACE * 2, TrueStatements, FunID), 
-            gen_output(FileRef, 0, ";\n"),
+            add_body(0, " of\n"),          
+            add_body(Indent + ?INDENT_SPACE, "true ->\n"),    %% true         
+            statements(Indent + ?INDENT_SPACE * 2, TrueStatements, FunID), 
+            add_body(0, ";\n"),
             
-            gen_output(FileRef, Indent + ?INDENT_SPACE, "_ ->\n"),   
+            add_body(Indent + ?INDENT_SPACE, "_ ->\n"),   
             
             case get_tail_funid(FunID) of
                 TailFunID when is_integer(TailFunID) -> 
                     TailStr = io_lib:format("TailFun~w()\n", [TailFunID]),
-                    gen_output(FileRef, Indent + ?INDENT_SPACE * 2, TailStr);
+                    add_body(Indent + ?INDENT_SPACE * 2, TailStr);
                 undefined ->
-                    gen_output(FileRef, Indent + ?INDENT_SPACE * 2, "ok\n")
+                    add_body(Indent + ?INDENT_SPACE * 2, "ok\n")
             end,
-            gen_output(FileRef, Indent, "end"),
+            add_body(Indent, "end"),
             ok;
         {'IF', Conditions, TrueStatements, FalseStatements} -> 
-            gen_output(FileRef, Indent, "case \n"), 
-            conditions(FileRef, Indent + ?INDENT_SPACE, Conditions),              
-            gen_output(FileRef, 0, " of \n"),          
-            gen_output(FileRef, Indent + ?INDENT_SPACE, "true ->\n"),    %% true         
-            statements(FileRef, Indent + ?INDENT_SPACE * 2, TrueStatements, FunID), 
-            gen_output(FileRef, 0, ";\n"),
-            gen_output(FileRef, Indent + ?INDENT_SPACE, "false ->\n"),    %% false         
-            statements(FileRef, Indent + ?INDENT_SPACE * 2, FalseStatements, FunID),  
-            gen_output(FileRef, 0, "\n"),             
-            gen_output(FileRef, Indent, "end"),
+            add_body(Indent, "case \n"), 
+            conditions(Indent + ?INDENT_SPACE, Conditions),              
+            add_body(0, " of \n"),          
+            add_body(Indent + ?INDENT_SPACE, "true ->\n"),    %% true         
+            statements(Indent + ?INDENT_SPACE * 2, TrueStatements, FunID), 
+            add_body(0, ";\n"),
+            add_body(Indent + ?INDENT_SPACE, "false ->\n"),    %% false         
+            statements(Indent + ?INDENT_SPACE * 2, FalseStatements, FunID),  
+            add_body(0, "\n"),             
+            add_body(Indent, "end"),
             ok;
         _ ->
             ok
     end,    
     ok.
  
-while_statement(FileRef, Indent, WhileStatements, FunID) ->
+while_statement(Indent, WhileStatements) ->
     case WhileStatements of
         {'WHILE', Conditions, Statements} ->
-             gen_output(FileRef, Indent, "case \n"), 
-             conditions(FileRef, Indent + ?INDENT_SPACE, Conditions),              
-             gen_output(FileRef, 0, " of \n"),          
-             gen_output(FileRef, Indent + ?INDENT_SPACE, "true ->\n"),    %% true         
-             statements(FileRef, Indent + ?INDENT_SPACE * 2, Statements, FunID), 
+             CondFunID = get_fun_id(),
+             CondFunStr = io_lib:format("CondFun~w = \n", [CondFunID]),
+             add_body(Indent + ?INDENT_SPACE, CondFunStr),
+             add_body(Indent + ?INDENT_SPACE * 2 , "fun() ->\n"),
+             conditions(Indent + ?INDENT_SPACE * 3, Conditions), 
+             add_body(0, "\n"),
+             add_body(Indent + ?INDENT_SPACE * 2, "end,\n"),
              
-             %%循环
-             gen_output(FileRef, 0, ",\n"),
-             ScriptID = get_scriptid(),
-             StrLoop = io_lib:format("script_execute(~w, ~w)", [ScriptID, FunID]),             
-             gen_output(FileRef, Indent + ?INDENT_SPACE * 2, StrLoop),          
-             gen_output(FileRef, 0, ";\n"),
-             
-             gen_output(FileRef, Indent + ?INDENT_SPACE, "_ ->\n"),
-             gen_output(FileRef, Indent + ?INDENT_SPACE * 2, "ok\n"),
-             gen_output(FileRef, Indent, "end"),
-             ok;
+             LoopFunID = get_fun_id(),
+             LoopFunStr = io_lib:format("LoopFun~w = \n", [LoopFunID]),
+             add_body(Indent + ?INDENT_SPACE, LoopFunStr),
+             add_body(Indent + ?INDENT_SPACE * 2 , "fun() ->\n"),
+             statements(Indent + ?INDENT_SPACE * 3, Statements, ?DEFAULT_TAILFUNID), 
+             add_body(0, "\n"),
+             add_body(Indent + ?INDENT_SPACE *2, "end,\n"),
+              
+             {ok, CondFunID, LoopFunID};
         _ ->
             ok
-    end,
+    end.
+
+shift_statement(Statements, FunId) ->
+    add_function(FunId, Statements),
     ok.
 
+add_function(Funid, Statements) ->
+    case get(script_source) of
+        undefined ->
+            erlang:put(script_source, #script_source{functions = [{Funid, Statements}]}),
+            ok;
+        ScriptSource ->
+            #script_source{functions = Funs} = ScriptSource,
+            NewScriptSource = ScriptSource#script_source{functions =[{Funid, Statements} | Funs]},
+            put(script_source, NewScriptSource),
+            ok
+    end.
 
-conditions(FileRef, Indent, Conditions) ->
+
+
+conditions(Indent, Conditions) ->
     case Conditions of
         {condition, Condition} ->
-            condition(FileRef, Indent, Condition),
+            condition(Indent, Condition),
             ok;
         {Condition, Logic, OtherConditions} ->
-            condition(FileRef, Indent, Condition),
-            logic(FileRef, 0, Logic),
-            gen_output(FileRef, 0, "\n"),
-            conditions(FileRef, Indent, OtherConditions),
+            condition(Indent, Condition),
+            logic(0, Logic),
+            add_body(0, "\n"),
+            conditions(Indent, OtherConditions),
             ok;
         _ ->
             io:format("", [])
     end,
     ok.
 
-condition(FileRef, Indent, Condition) ->
+condition(Indent, Condition) ->
     case Condition of
         {express, Express} ->
-            express(FileRef, Indent, Express),
+            express(Indent, Express),
             ok;
         {express, Express, Compare, OtherCondition} ->
-            express(FileRef, Indent, Express),
-            compare(FileRef, 0, Compare),
-            condition(FileRef, 0, OtherCondition),
+            express(Indent, Express),
+            compare(0, Compare),
+            condition(0, OtherCondition),
             ok;
         {function, Function} ->
-            function(FileRef, Indent, Function),
+            function(Indent, Function),
             ok;
         {function, Function, Compare, OtherCondition} ->
-            function(FileRef, Indent, Function),
-            compare(FileRef, 0, Compare),
-            condition(FileRef, 0, OtherCondition),
+            function(Indent, Function),
+            compare(0, Compare),
+            condition(0, OtherCondition),
             ok;
         _ ->
             ok
@@ -549,16 +697,16 @@ condition(FileRef, Indent, Condition) ->
     ok.
 
 %%遇到终结符时才有输出
-logic(FileRef, Indent, Logic) ->
+logic(Indent, Logic) ->
     case Logic of
         '&&' ->
-            gen_output(FileRef, Indent, " andalso"),
+            add_body(Indent, " andalso"),
             ok;
         '||' ->
-            gen_output(FileRef, Indent, " orelse"),
+            add_body(Indent, " orelse"),
             ok;
         '!' ->            
-            gen_output(FileRef, Indent, " not"),
+            add_body(Indent, " not"),
             ok;
             
         _ ->
@@ -566,31 +714,31 @@ logic(FileRef, Indent, Logic) ->
     end,
     ok.
 
-compare(FileRef, Indent, Compare) ->    
+compare(Indent, Compare) ->    
     case Compare of
         '>' ->
-            gen_output(FileRef, Indent, " >"),
+            add_body(Indent, " >"),
             ok;
         '<' ->
-            gen_output(FileRef, Indent, " <"),
+            add_body(Indent, " <"),
             ok;
         '==' ->            
-            gen_output(FileRef, Indent, " =:="),
+            add_body( Indent, " =:="),
             ok;   
         '!=' ->            
-            gen_output(FileRef, Indent, " =/="),
+            add_body( Indent, " =/="),
             ok;            
         _ ->
             dd
     end, 
     ok.
 
-arithmetic(FileRef, Indent, Arithmetic) ->
+arithmetic(Indent, Arithmetic) ->
     StrAtith = atom_to_list(Arithmetic),
-    gen_output(FileRef, Indent, StrAtith),
+    add_body(Indent, StrAtith),
     ok.
 
-vars(FileRef, Indent, Vars) ->
+vars(Indent, Vars) ->
     StrVars = 
         case Vars of
             V when erlang:is_integer(V) orelse erlang:is_float(V) ->
@@ -599,24 +747,27 @@ vars(FileRef, Indent, Vars) ->
                 io_lib:format(" ~s ", [Vars])
         end,
             
-    gen_output(FileRef, Indent, StrVars),
+    add_body(Indent, StrVars),
     ok. 
 
 
 
-express(FileRef, Indent, Express) ->
+express(Indent, Express) ->
     case Express of
         {vars, Vars} ->
-            vars(FileRef, Indent, Vars),
+            vars(Indent, Vars),
             ok;
         {atom, Atom} ->
             StrAtom = io_lib:format(" ~w ", [Atom]),
-            gen_output(FileRef, Indent, StrAtom),
+            add_body(Indent, StrAtom),
+            ok;
+        {function, Function} ->
+            function(Indent, Function),
             ok;
         {Vars, Arithmetic,  OtherExpress} ->
-            vars(FileRef, 0, Vars),
-            arithmetic(FileRef, 0, Arithmetic),
-            express(FileRef, Indent, OtherExpress),
+            vars(0, Vars),
+            arithmetic(0, Arithmetic),
+            express(Indent, OtherExpress),
             ok;
         _ ->
             io:format("unknow statement function [~w]", [Express])
@@ -624,21 +775,21 @@ express(FileRef, Indent, Express) ->
     ok.
 
 
-function(FileRef, Indent, Statement) ->
+function(Indent, Statement) ->
     case Statement of
         {func, FuncName, Args} -> 
             case ?FUNCTION_MAP_MODULE:?FUNCTION_MAP_FUNCTION(FuncName) of
                 {Module, _} ->
                     Output = io_lib:format("~w:~w(", [Module, FuncName]),
-                    gen_output(FileRef, Indent, Output),
-                    args(FileRef, 0, Args),            
-                    gen_output(FileRef, 0, ")");
+                    add_body(Indent, Output),
+                    args(0, Args),            
+                    add_body(0, ")");
                 _ ->
                     
                     Output = io_lib:format("~w(", [FuncName]),
-                    gen_output(FileRef, Indent, Output),
-                    args(FileRef, 0, Args),            
-                    gen_output(FileRef, 0, ")")
+                    add_body(Indent, Output),
+                    args(0, Args),            
+                    add_body(0, ")")
                     %throw({"Not Define Function", [FuncName]})
             end,
             ok;
@@ -647,31 +798,91 @@ function(FileRef, Indent, Statement) ->
     end,
     ok.
 
-args(_FileRef, _Indent, []) ->
+args(_Indent, []) ->
     ok;
-args(FileRef, _Indent, [Arg]) ->
-    arg(FileRef, 0, Arg),
+args(_Indent, [Arg]) ->
+    arg(0, Arg),
     ok;
-args(FileRef, Indent, [Arg|OtherArgs]) ->
-    arg(FileRef, 0, Arg),
-    gen_output(FileRef, 0, ","),
-    args(FileRef, Indent, OtherArgs),
+args(Indent, [Arg|OtherArgs]) ->
+    arg(0, Arg),
+    add_body(0, ","),
+    args(Indent, OtherArgs),
     ok.
 
-arg(FileRef, Indent, Arg) ->
+arg(Indent, Arg) ->
     case Arg of
         {function, FuncName} ->
-            function(FileRef, 0, FuncName);
+            function(0, FuncName);
         {var, StrVar} ->
             Output = io_lib:format("~s", [StrVar]),
-            gen_output(FileRef, Indent, Output),
+            add_body(Indent, Output),
             ok;
         Arg ->                    
             Output = io_lib:format("~w", [Arg]),
-            gen_output(FileRef, Indent, Output),
+            add_body(Indent, Output),
             ok
     end,
     ok.
+
+get_cur_scriptid() ->
+    case get(cur_scriptid) of
+        undefined ->
+            0;
+        Value ->
+            Value
+    end.
+
+add_body_end(IndentNum, Message) ->
+    add_body(IndentNum, Message, back).
+
+add_body(IndentNum, Message) ->
+    add_body(IndentNum, Message, front).
+
+add_body(IndentNum, Message, Dir) ->
+    add_script_source_element(IndentNum, Message, #script_source.body, Dir).
+
+add_script_source_element(IndentNum, Message, ELementIndex) ->
+    add_script_source_element(IndentNum, Message, ELementIndex, front).
+
+add_script_file_element(IndentNum, Message, ELementIndex) ->
+    ScriptFile = get(script_file),
+    ElementList = erlang:element(ELementIndex, ScriptFile),
+    NewElement = [{IndentNum, Message} | ElementList ],
+    NewScriptFile = erlang:setelement(ELementIndex, ScriptFile, NewElement),
+    put(script_file, NewScriptFile),
+    ok.
+
+add_script_source_element(IndentNum, Message, ELementIndex, Dir) ->
+    ScriptFile = get(script_file),
+    CurScriptID = get_cur_scriptid(),
+    #script_file{sources = OrddictSource} = ScriptFile,
+    case orddict:find(CurScriptID, OrddictSource) of
+        error ->
+            ScriptSource = #script_source{},
+            NewScriptSource = erlang:setelement(ELementIndex, ScriptSource, [{IndentNum, Message}]),
+            
+            NewOrddictSource = orddict:store(CurScriptID, NewScriptSource, OrddictSource),
+            NewSourceFile = ScriptFile#script_file{sources = NewOrddictSource},
+            put(script_file, NewSourceFile),
+            ok;
+        {ok, ScriptSource} ->
+            Element = erlang:element(ELementIndex, ScriptSource),
+            
+            NewElement =
+                case Dir of
+                    back ->
+                        Element ++ [{IndentNum, Message}];
+                    _ ->
+                        [{IndentNum, Message} | Element]
+                end,
+            NewScriptSource = setelement(ELementIndex, ScriptSource, NewElement),
+            NewOrddictSource = orddict:store(CurScriptID, NewScriptSource, OrddictSource),
+            NewSourceFile = ScriptFile#script_file{sources = NewOrddictSource},
+            put(script_file, NewSourceFile),
+            ok
+    end, 
+    ok.
+ 
 
 gen_output(FileRef, IndentNum, Message) ->
     ok = indent(FileRef, IndentNum), 

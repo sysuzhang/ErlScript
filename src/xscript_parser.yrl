@@ -1,43 +1,44 @@
 %%非终结符
 Nonterminals
-scripts statements if_statement while_statement function wait_function args arg express conditions condition compare vars arithmetic logic.
+scripts metascript statements statement if_statement while_statement function wait_function args arg express conditions condition compare vars arithmetic logic.
 
 %终结符
-Terminals '+' '-' '*' '/' '=' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '{' '}' 'IF' 'ELSE' 'WHILE' 'WAIT' atom integer float var.
+Terminals '+' '-' '*' '/' '.' '=' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '[' ']' '{' '}' 'if' 'else' 'while' 'wait' 'script' atom integer float var.
 
 Rootsymbol scripts.
 
 %%语法分析器
-scripts -> '$empty' : [].
+%scripts -> '$empty' : [].
 scripts -> statements : '$1'.
 
 %%段落分析 
-statements -> wait_function ';' : {wait_function, '$1'}.
-statements -> wait_function ';' statements : [{wait_function, '$1', '$3'}].  %%异步等待语句
-statements -> if_statement : {if_statement, '$1'}.
-statements -> if_statement statements : [{if_statement, '$1', '$2'}].        %%IF语句
-statements -> while_statement : {while_statement, '$1'}.
-statements -> while_statement statements : [{while_statement, '$1', '$2'}].  %%WHILE语句
-statements -> function ';' : [{function, '$1'}].
-statements -> function ';' statements: [{function, '$1'} | '$3'].
-statements -> vars '=' function ';' : {var, '$1', '$3'}.                                    %%支持变量
-statements -> vars  '=' function ';' statements : [{var, '$1', '$3'} | '$5'].
+statements -> '$empty' : []. 
+statements -> metascript '.' statements : [{metascript,'$1'} |'$3'].         %%脚本参数定义
+statements -> wait_function ';' statements : [{wait_function, '$1', '$3'}].  %%异步等待子句
+statements -> if_statement statements : [{if_statement, '$1', '$2'}].        %%IF子句
+statements -> while_statement statements : [{while_statement, '$1', '$2'}].  %%WHILE子句
+statements -> statement ';' statements : [{statement, '$1'} | '$3'].         %%普通子句
     
-
-%statements -> statement statements : ['$1' | '$2']. 
-
+%%参数
+metascript -> '-' 'script' '(' '[' args ']' ')'  :{param, '$5'}.   %%支持参数
+ 
 %%语句分析
 %%IF子句
-if_statement -> 'IF' '(' conditions ')' '{'  '}' : {none}.
-if_statement -> 'IF' '(' conditions ')' '{'  statements '}' : {'IF', '$3', '$6'}.
-if_statement -> 'IF' '(' conditions ')' '{' statements '}' 'ELSE' '{'  '}' :  {'IF','$3','$6'}.
-if_statement -> 'IF' '(' conditions ')' '{'  '}' 'ELSE' '{' statements '}' :  {'IF',{'not','$3'},'$9'}.
-if_statement -> 'IF' '(' conditions ')' '{' statements '}' 'ELSE' '{' statements '}' :  {'IF','$3','$6','$10'}.
+if_statement -> 'if' '(' conditions ')' '{'  '}' : {none}.
+if_statement -> 'if' '(' conditions ')' '{'  statements '}' : {'IF', '$3', '$6'}.
+if_statement -> 'if' '(' conditions ')' '{' statements '}' 'else' '{'  '}' :  {'IF','$3','$6'}.
+if_statement -> 'if' '(' conditions ')' '{'  '}' 'else' '{' statements '}' :  {'IF',{'not','$3'},'$9'}.
+if_statement -> 'if' '(' conditions ')' '{' statements '}' 'else' '{' statements '}' :  {'IF','$3','$6','$10'}.
 
-while_statement -> 'WHILE' '(' conditions ')' '{' statements '}' : {'WHILE', '$3', '$6'}.
+while_statement -> 'while' '(' conditions ')' '{' statements '}' : {'WHILE', '$3', '$6'}.
 
 %%wait子句
-wait_function -> 'WAIT' '(' args  ')' : {'WAIT', '$3'}.
+wait_function -> 'wait' '(' args  ')' : {'WAIT', '$3'}.
+
+%%语句
+statement -> express  : {express, '$1'}.
+statement -> vars '=' express : {assignment, '$1', '$3'}.
+statement -> atom '=' express : {assert, unwrap('$1'), '$3'}.
 
 %%条件分析
 conditions -> condition : {condition, '$1'}.
@@ -45,13 +46,14 @@ conditions -> condition logic conditions : {'$1','$2','$3'}.
 
 condition -> express : {express, '$1'}.
 condition -> express compare condition: {express, '$1', '$2', '$3'}.
-condition -> function : {function, '$1'}.
-condition -> function compare condition: {function, '$1', '$2', '$3'}.
 
 %%表达式
+%Expressions only contain identifiers, literals and operators, where operators include arithmetic and boolean operators, 
+%the function call operator () the subscription operator [] and similar, and can be reduced to some kind of "value"
 express -> vars : {vars, '$1'}.
 express -> atom : {atom, unwrap('$1')}.
-express -> vars arithmetic express : {'$1', '$2', '$3'}.
+express -> function : {function, '$1'}.
+express -> vars arithmetic express : {operation, '$1', '$2', '$3'}.
 
 %%函数
 function -> atom '(' args ')' : {func, unwrap('$1'), '$3'}. 

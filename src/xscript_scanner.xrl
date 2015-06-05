@@ -6,18 +6,13 @@ D = [0-9]
 F = (\+|-)?[0-9]+\.[0-9]+((E|e)(\+|-)?[0-9]+)?
 HEX = 0x[0-9A-Fa-f]+
 WS  = ([\000-\s]|%.*)
-S = [\(\)\]\[\{\};=><,]
+KW = (if|else|while|wait|script)
+DS = (&&|==|!=|\|\|)
+S = [\(\)\]\[\{\};=><,\+-/\*\.!]
 
 Rules.
-if : {token, {'IF', TokenLine}}.
-else : {token, {'ELSE', TokenLine}}. 
-while :  {token, {'WHILE', TokenLine}}. 
-wait :  {token, {'WAIT', TokenLine}}. 
-&& : {token, {'&&', TokenLine}}. 
-== : {token, {'==', TokenLine}}. 
-!= : {token, {'!=', TokenLine}}. 
-\|\| : {token, {'||', TokenLine}}. 
-! : {token, {'!', TokenLine}}. 
+{KW} : {token, {list_to_atom(TokenChars), TokenLine}}.
+{DS} : {token, {list_to_atom(TokenChars),TokenLine}}.
 {S} : {token, {list_to_atom(TokenChars),TokenLine}}.
 {LC}({L}|{D})* : {token, {atom, TokenLine, list_to_atom(TokenChars)}}.
 {UC}({L}|{D})* : {token, {var, TokenLine, TokenChars}}.

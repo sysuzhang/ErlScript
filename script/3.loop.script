@@ -1,6 +1,7 @@
+T = find_target();
  while(random_find(1,num) > 0)
 {
-     attack_target(100);
+     attack_target(T, 100);
      wait(100);
      create_monster(1,500);
 }

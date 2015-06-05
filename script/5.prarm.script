@@ -1,0 +1,3 @@
+-script([SkillID, ObjectKey, Pos]).
+ok = find_target(100);
+T = attack_target();
