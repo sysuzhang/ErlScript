@@ -1,0 +1,6 @@
+ attack_hurt(FightValue);
+ 
+function calc_fightattr() 
+{
+     3 * 5;
+}

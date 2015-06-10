@@ -1,0 +1,12 @@
+{application, xscript,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { xscript_app, []}},
+  {env, []}
+ ]}.
