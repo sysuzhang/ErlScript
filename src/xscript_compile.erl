@@ -10,8 +10,7 @@
 %% ====================================================================
 -export([generate_file/1, generate_file/2]).
 -export([generate_dir/1, generate_dir/2]).
--export([comment/1]).
--export([test1/0, test2/0, test3/0, test4/0, test5/0]).
+-export([comment/1]). 
 -export([get_all_define_functions/0]).
 -include("xscript_compile.hrl").
 
@@ -550,7 +549,7 @@ statement(Indent, Statement, FunID) ->
 wait_statement(Indent, WaitStatement, FunId) ->
     case WaitStatement of
         {'WAIT', [Time]} ->
-            case get_function_define(wait, 1) of
+            case get_function_define(wait, 3) of
                 {Module, _} ->                     
                     CurScriptId = get_cur_scriptid(),
                     Output = 
@@ -960,12 +959,12 @@ get_all_define_functions() ->
                         InfoList = Module:module_info(),                        
                         ExportList = lists:keyfind(exports, 1, InfoList),
                         DefineList = [ {Module, {FunName, Argc}}|| {FunName, Argc} <- erlang:element(2, ExportList), FunName =/= module_info],
-                        case catch lists:any(fun({Module, {FunName, Argc}}) ->
-                                          case lists:keyfind({FunName, Argc}, 2, Acc) of
+                        case catch lists:any(fun({_Module, {FunName2, Argc2}}) ->
+                                          case lists:keyfind({FunName2, Argc2}, 2, Acc) of
                                               false ->
                                                   false;
                                               Tuple ->
-                                                  throw({ok, FunName, Argc, Tuple})
+                                                  throw({ok, FunName2, Argc2, Tuple})
                                           end
                                   end, DefineList) of
                             {ok, FunName, Argc, Tuple} ->

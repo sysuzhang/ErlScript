@@ -10,7 +10,7 @@
 -export([]).
 -compile(export_all).
 
-wait(Time) ->
+wait(Time, ScriptId, TailFun) ->
     ok.
 
 create_monster() ->

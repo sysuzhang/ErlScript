@@ -7,6 +7,8 @@ DSL(领域特定语言) for erlang,  适用于erlang的脚本语言。<br/>
 2. 消除进程堵塞<br/>
 3. 支持顺序、判断、循环等程序逻辑<br/>
 4. 支持变量<br/>
+5. 支持变参<br/>
+6. 支持脚本函数与实际模块自动映射
 
 ## 目录说明
 script: 示例脚本以及生成的代码<br/>
@@ -14,8 +16,7 @@ src: 源代码<br/>
 
 ## 文件说明
 xscript_scanner.xrl: 词法分析文件<br/>
-xscript_parser.yrl: 语法分析文件<br/>
-xscript_function_map.erl: 脚本函数定义映射<br/>
+xscript_parser.yrl: 语法分析文件<br/
 xscript_function_define.erl: 脚本函数实现模块<br/>
 xscript_utility.erl：公共模块<br/>
 xscript_file.erl: 文件操作模块<br/>
@@ -30,6 +31,7 @@ xscript_compile.erl: 脚本语言生成模块<br/>
 xscript_compile:generate_file(ScriptFilename, Options):<br/>
   ScriptFilename: 脚本文件名(包含相对于工作目录的相对路径)<br/>
   Options: 选项,当前支持: {out_dir, Dir}: 指定文件生成目录<br/>
+  xscript_compile : 宏FUNCTION_DEFINE定义了当前脚本映射函数的实现模块<br/>
 
 
 ## 示例example(对应的生成文件，见script目录):
@@ -80,18 +82,18 @@ if/while/wait 子句转换成函数，并且成为程序的尾函数，所有函
 编译原理对应的是关键字是：statements statement functions.....<br/>
 语法分析参考对应的语法分析文件，核心是：<br/>
 <pre>
-    %%段落分析     
-    statements -> wait_function ';' : {wait_function, '$1'}.
-    statements -> wait_function ';' statements : [{wait_function, '$1', '$3'}].  %%异步等待语句
-    statements -> if_statement : {if_statement, '$1'}.
-    statements -> if_statement statements : [{if_statement, '$1', '$2'}].        %%IF语句
-    statements -> while_statement : {while_statement, '$1'}.
-    statements -> while_statement statements : [{while_statement, '$1', '$2'}].  %%WHILE语句
-    statements -> function ';' : [{function, '$1'}].
-    statements -> function ';' statements: [{function, '$1'} | '$3'].
+    %%段落分析 
+    statements -> '$empty' : []. 
+    statements -> metascript '.' statements : [{metascript,'$1'} |'$3'].         %%脚本参数定义
+    statements -> wait_function ';' statements : [{wait_function, '$1', '$3'}].  %%异步等待子句
+    statements -> if_statement statements : [{if_statement, '$1', '$2'}].        %%IF子句
+    statements -> while_statement statements : [{while_statement, '$1', '$2'}].  %%WHILE子句
+    statements -> statement ';' statements : [{statement, '$1'} | '$3'].         %%普通子句
 </pre>
 
-## ToDo:
-[Planned] 支持本地函数定义
-[Planned] 扩展使用脚本虚拟机的方法清除阻塞  
+## TODO:
+[Planned] 支持本地函数定义<br/>
+[Planned] 扩展使用脚本虚拟机的方法清除阻塞 <br/>
+[Planned] 扩展支持for函数 <br/> 
+[Planned] 扩展支持命名空间 <br />
 
