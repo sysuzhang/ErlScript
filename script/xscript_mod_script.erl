@@ -1,5 +1,5 @@
 %%自动生成,请不要修改
-%%@datetime:{{2015,6,10}{16,52,16}}
+%%@datetime:{{2015,6,11}{18,43,55}}
 -module(xscript_mod_script).
 
 -compile([export_all]).
@@ -19,9 +19,9 @@ script_execute(5, 0, [SKillID,ObjectKey,Pos]) ->
             xscript_function_define:notify_effect(),
             TailFun1 = 
                 fun() ->
-                    xscript_function_define:attack_target(ObjectKey)
+                    xscript_function_define:attack_target([ObjectKey])
                 end, 
-            xscript_function_define:wait(3000, TailFun1);
+            xscript_function_define:wait(3000, 5, TailFun1);
         false ->
             xscript_function_define:throw(error)
     end;

@@ -23,11 +23,8 @@ statements -> statement ';' statements : [{statement, '$1'} | '$3'].         %%�
 metascript -> '-' 'script' '(' '[' args ']' ')'  :{param, '$5'}.   %%支持参数
  
 %%语句分析
-%%IF子句
-if_statement -> 'if' '(' conditions ')' '{'  '}' : {none}.
-if_statement -> 'if' '(' conditions ')' '{'  statements '}' : {'IF', '$3', '$6'}.
-if_statement -> 'if' '(' conditions ')' '{' statements '}' 'else' '{'  '}' :  {'IF','$3','$6'}.
-if_statement -> 'if' '(' conditions ')' '{'  '}' 'else' '{' statements '}' :  {'IF',{'not','$3'},'$9'}.
+%%IF子句 
+if_statement -> 'if' '(' conditions ')' '{'  statements '}' : {'IF', '$3', '$6'}. 
 if_statement -> 'if' '(' conditions ')' '{' statements '}' 'else' '{' statements '}' :  {'IF','$3','$6','$10'}.
 
 while_statement -> 'while' '(' conditions ')' '{' statements '}' : {'WHILE', '$3', '$6'}.
@@ -56,7 +53,8 @@ express -> function : {function, '$1'}.
 express -> vars arithmetic express : {operation, '$1', '$2', '$3'}.
 
 %%函数
-function -> atom '(' args ')' : {func, unwrap('$1'), '$3'}. 
+function -> atom '(' args ')' : {func, unwrap('$1'), '$3', args}. 
+function -> atom '(' '[' args ']' ')' : {func, unwrap('$1'), '$4', list}. 
 
 %%参数
 args -> '$empty' : [].

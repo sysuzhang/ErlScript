@@ -41,7 +41,7 @@
                         }).
 
 
--export([test/0, test1/0, test2/0, test3/0, test4/0, test_one/0, test_dir/0]).
+-export([test/0, test1/0, test2/0, test3/0, test4/0, test5/0, test_one/0, test_dir/0]).
 test() ->
     test1(),
     test2(),
@@ -780,13 +780,24 @@ express(Indent, Express) ->
 
 function(Indent, Statement) ->
     case Statement of
-        {func, FuncName, Args} -> 
+        {func, FuncName, Args, Flag} -> 
             case ?FUNCTION_MAP_MODULE:?FUNCTION_MAP_FUNCTION(FuncName) of
                 {Module, _} ->
-                    Output = io_lib:format("~w:~w(", [Module, FuncName]),
+                    Output = 
+                        case Flag of
+                            args ->
+                                io_lib:format("~w:~w(", [Module, FuncName]);
+                            list ->
+                                io_lib:format("~w:~w([", [Module, FuncName])
+                        end,
                     add_body(Indent, Output),
-                    args(0, Args),            
-                    add_body(0, ")");
+                    args(0, Args), 
+                    case Flag of
+                        args ->
+                            add_body(0, ")");
+                        list ->
+                            add_body(0, "])")
+                    end;
                 _ ->
                     
                     Output = io_lib:format("~w(", [FuncName]),
