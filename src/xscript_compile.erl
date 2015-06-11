@@ -12,6 +12,7 @@
 -export([generate_dir/1, generate_dir/2]).
 -export([comment/1]).
 -export([test1/0, test2/0, test3/0, test4/0, test5/0]).
+-export([get_all_define_functions/0]).
 -include("xscript_compile.hrl").
 
 -define(INDENT_SPACE, 4).
@@ -22,6 +23,7 @@
 
 %%代码生成保存
 -record(script_file, {sources = orddict:new(),
+                      defined_function = [], %%已定义的函数
                       header = [],  %%Header代码
                       include = [], %%include代码
                       default_function = [],
@@ -89,7 +91,7 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
                 {true, get_output_filename(Options)}
         end,
     
-    put(script_file, #script_file{}),
+    put(script_file, #script_file{defined_function =  get_all_define_functions()}),
     
     case IsAllInOne of
         true ->            
@@ -124,7 +126,7 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
                         ok
                 end,
             lists:foreach(fun(File) -> 
-                                  case catch GenScriptFun(File) of
+                                  case GenScriptFun(File) of
                                       ok ->
                                           ok;
                                       Err -> 
@@ -548,7 +550,7 @@ statement(Indent, Statement, FunID) ->
 wait_statement(Indent, WaitStatement, FunId) ->
     case WaitStatement of
         {'WAIT', [Time]} ->
-            case ?FUNCTION_MAP_MODULE:?FUNCTION_MAP_FUNCTION (wait) of
+            case get_function_define(wait, 1) of
                 {Module, _} ->                     
                     CurScriptId = get_cur_scriptid(),
                     Output = 
@@ -559,7 +561,7 @@ wait_statement(Indent, WaitStatement, FunId) ->
                         end,
                     add_body(Indent, Output);
                 _ ->
-                    throw({"Not Define Function: ~w", [wait]})
+                    throw({not_defined_function, wait, 1})
             end;
         _ ->
             ok
@@ -781,8 +783,10 @@ express(Indent, Express) ->
 function(Indent, Statement) ->
     case Statement of
         {func, FuncName, Args, Flag} -> 
-            case ?FUNCTION_MAP_MODULE:?FUNCTION_MAP_FUNCTION(FuncName) of
-                {Module, _} ->
+            case get_function_define(FuncName, length(Args)) of
+                false ->
+                    throw({not_defined_function, FuncName, length(Args)});
+                {Module, _} -> 
                     Output = 
                         case Flag of
                             args ->
@@ -799,7 +803,7 @@ function(Indent, Statement) ->
                             add_body(0, "])")
                     end;
                 _ ->
-                    
+                    %%ToDo : 本地函数
                     Output = io_lib:format("~w(", [FuncName]),
                     add_body(Indent, Output),
                     args(0, Args),            
@@ -949,4 +953,36 @@ set_tail_funid(FunId, TailFunId) ->
         _ ->
            undefined
     end.
- 
+
+get_all_define_functions() ->
+    DefindModuleList = ?FUNCTION_DEFINE,
+    lists:foldr(fun(Module, Acc) ->
+                        InfoList = Module:module_info(),                        
+                        ExportList = lists:keyfind(exports, 1, InfoList),
+                        DefineList = [ {Module, {FunName, Argc}}|| {FunName, Argc} <- erlang:element(2, ExportList), FunName =/= module_info],
+                        case catch lists:any(fun({Module, {FunName, Argc}}) ->
+                                          case lists:keyfind({FunName, Argc}, 2, Acc) of
+                                              false ->
+                                                  false;
+                                              Tuple ->
+                                                  throw({ok, FunName, Argc, Tuple})
+                                          end
+                                  end, DefineList) of
+                            {ok, FunName, Argc, Tuple} ->
+                                io:format("Fun:~w:~w/~w, Already Default in ~p", [Module, FunName, Argc, Tuple]),
+                                throw({redefined, Module, FunName, Argc, Tuple});
+                            _ ->
+                                none
+                        end,
+                        DefineList ++ Acc
+                end, [], DefindModuleList).
+
+
+%%获得函数定义
+get_function_define(FunName, Argc) ->
+    case get(script_file) of
+        #script_file{defined_function = DefinedFunction} ->
+            lists:keyfind({FunName, Argc}, 2, DefinedFunction);
+        _ ->
+            false
+    end.
