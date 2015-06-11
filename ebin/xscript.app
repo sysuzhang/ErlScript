@@ -5,7 +5,8 @@
               {applications,[kernel,stdlib]},
               {mod,{xscript_app,[]}},
               {env,[]},
-              {modules,[xscript_compile,xscript_file,xscript_function_define,
-                        xscript_function_map,xscript_parser,xscript_scanner,
-                        xscript_utility,xscript_vm,xscript_worker,xscript_app,
-                        xscript_sup,xscript_mod_script]}]}.
+              {modules,[xscript_app,xscript_compile,xscript_file,
+                        xscript_function_define,xscript_function_map,
+                        xscript_parser,xscript_scanner,xscript_sup,
+                        xscript_utility,xscript_vm,xscript_worker,
+                        xscript_mod_script]}]}.

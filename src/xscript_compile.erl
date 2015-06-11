@@ -550,11 +550,12 @@ wait_statement(Indent, WaitStatement, FunId) ->
         {'WAIT', [Time]} ->
             case ?FUNCTION_MAP_MODULE:?FUNCTION_MAP_FUNCTION (wait) of
                 {Module, _} ->                     
+                    CurScriptId = get_cur_scriptid(),
                     Output = 
                         if FunId =/= undefined ->
-                               io_lib:format("~w:~w(~w, TailFun~w)", [Module, wait, Time, FunId]);
+                               io_lib:format("~w:~w(~w, ~w, TailFun~w)", [Module, wait, Time, CurScriptId, FunId]);
                            true ->
-                               io_lib:format("~w:~w(~w, undefined)", [Module, wait, Time])
+                               io_lib:format("~w:~w(~w, ~w, undefined)", [Module, wait, Time, CurScriptId])
                         end,
                     add_body(Indent, Output);
                 _ ->
