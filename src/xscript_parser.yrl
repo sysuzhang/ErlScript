@@ -53,8 +53,7 @@ express -> function : {function, '$1'}.
 express -> vars arithmetic express : {operation, '$1', '$2', '$3'}.
 
 %%函数
-function -> atom '(' args ')' : {func, unwrap('$1'), '$3', args}. 
-function -> atom '(' '[' args ']' ')' : {func, unwrap('$1'), '$4', list}. 
+function -> atom '(' args ')' : {func, unwrap('$1'), '$3'}.  
 
 %%参数
 args -> '$empty' : [].
@@ -65,6 +64,7 @@ arg -> var : {var, unwrap('$1')}.
 arg -> integer : unwrap('$1').
 arg -> atom : unwrap('$1').
 arg -> function : {function, '$1'}.
+arg -> '[' args ']' : {vparam, '$2'}.  %%支持可变参数
 
 %%变量
 vars -> integer : unwrap('$1').

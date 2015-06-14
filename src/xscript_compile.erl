@@ -781,26 +781,15 @@ express(Indent, Express) ->
 
 function(Indent, Statement) ->
     case Statement of
-        {func, FuncName, Args, Flag} -> 
+        {func, FuncName, Args} -> 
             case get_function_define(FuncName, length(Args)) of
                 false ->
                     throw({not_defined_function, FuncName, length(Args)});
                 {Module, _} -> 
-                    Output = 
-                        case Flag of
-                            args ->
-                                io_lib:format("~w:~w(", [Module, FuncName]);
-                            list ->
-                                io_lib:format("~w:~w([", [Module, FuncName])
-                        end,
+                    Output = io_lib:format("~w:~w(", [Module, FuncName]), 
                     add_body(Indent, Output),
                     args(0, Args), 
-                    case Flag of
-                        args ->
-                            add_body(0, ")");
-                        list ->
-                            add_body(0, "])")
-                    end;
+                    add_body(0, ")");
                 _ ->
                     %%ToDo : 本地函数
                     Output = io_lib:format("~w(", [FuncName]),
@@ -833,6 +822,11 @@ arg(Indent, Arg) ->
         {var, StrVar} ->
             Output = io_lib:format("~s", [StrVar]),
             add_body(Indent, Output),
+            ok;
+        {vparam, Args} -> 
+            add_body(Indent, "["),
+            args(0, Args),
+            add_body(Indent, "]"),
             ok;
         Arg ->                    
             Output = io_lib:format("~w", [Arg]),

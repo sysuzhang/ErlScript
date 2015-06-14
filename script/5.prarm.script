@@ -3,7 +3,7 @@ if(check_apply_skill(SKillID, ObjectKey) == true)
 {
     notify_effect();
     wait(3000);
-    attack_target([ObjectKey]);
+    attack_target(100, [ObjectKey]);
 }
 else
 {
