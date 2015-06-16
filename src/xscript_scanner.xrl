@@ -8,7 +8,7 @@ HEX = 0x[0-9A-Fa-f]+
 WS  = ([\000-\s]|%.*)
 KW = (if|else|while|wait|script|return)
 DS = (&&|==|!=|\|\|)
-S = [\(\)\]\[\{\};=><,\+-/\*\.!]
+S = [\(\)\]\[\{\};=><,\+-/\*\.!:]
 
 Rules.
 {KW} : {token, {list_to_atom(TokenChars), TokenLine}}.

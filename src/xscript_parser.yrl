@@ -3,7 +3,7 @@ Nonterminals
 scripts metascript statements statement if_statement while_statement function wait_function args arg express conditions condition compare vars tuple list match arithmetic logic.
 
 %终结符
-Terminals '+' '-' '*' '/' '.' '=' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '[' ']' '{' '}' 'if' 'else' 'while' 'wait' 'script' 'return' atom integer float var.
+Terminals '+' '-' '*' '/' '.' '=' ':' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '[' ']' '{' '}' 'if' 'else' 'while' 'wait' 'script' 'return' atom integer float var.
 
 Rootsymbol scripts.
 
@@ -54,6 +54,7 @@ express -> vars arithmetic express : {operation, '$1', '$2', '$3'}.
 
 %%函数
 function -> atom '(' args ')' : {func, unwrap('$1'), '$3'}.  
+function -> atom ':' atom '(' args ')' : {func, unwrap('$1'),  unwrap('$3'), '$5'}.   %%支持命名空间
 
 %%匹配
 match -> tuple : {tuple, '$1'}.

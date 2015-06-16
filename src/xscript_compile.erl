@@ -547,7 +547,8 @@ statement(Indent, Statement, FunID) ->
             add_body(0, AssignStr),
             express(0, Express); 
         {return, Arg} ->
-            arg(Indent, Arg)
+            add_body(Indent, ""),
+            arg(0, Arg)
     end,
     ok.
     
@@ -803,7 +804,7 @@ function(Indent, Statement) ->
     case Statement of
         {func, FuncName, Args} -> 
             case get_function_define(FuncName, length(Args)) of
-                false ->
+                false -> 
                     throw({not_defined_function, FuncName, length(Args)});
                 {Module, _} -> 
                     Output = io_lib:format("~w:~w(", [Module, FuncName]), 
@@ -818,6 +819,12 @@ function(Indent, Statement) ->
                     add_body(0, ")")
                     %throw({"Not Define Function", [FuncName]})
             end,
+            ok;        
+        {func, ModuleName, FuncName, Args} ->     
+            Output = io_lib:format("~w:~w(", [ModuleName, FuncName]), 
+            add_body(Indent, Output),
+            args(0, Args), 
+            add_body(0, ")"),
             ok;
         _ ->
             throw({"unknow statement function [~w]", [Statement]})
@@ -988,12 +995,12 @@ set_tail_funid(FunId, TailFunId) ->
 get_script_modules() ->
     case ?FUNC_DEFINE_TYPE of
         ?FUNC_DEFINE_TYPE_MODULE ->
-            ?FUNCTION_DEFINE_MODULE;
+            ?FUNCTION_DEFINE_MODULE ++ ?FUNCTION_STD_MODULE;
         ?FUNC_DEFINE_TYPE_DIR ->            
             Dir = ?FUNCTION_DEFINE_DIR, 
             true = filelib:is_dir(Dir),
             FileNames = filelib:wildcard("*.erl", Dir),
-            [list_to_atom(filename:basename(FileName, ".erl")) || FileName <- FileNames];
+            [list_to_atom(filename:basename(FileName, ".erl")) || FileName <- FileNames] ++ ?FUNCTION_STD_MODULE;
         _ ->
             throw(config_error)
     end. 

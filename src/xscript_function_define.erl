@@ -24,9 +24,7 @@ create_monster(Arg1, Arg2, Arg3) ->
 
 level() ->
     io:format("Level()~n", []).
-
-apply(Arg1, Arg2, Arg3) ->
-    io:format("apply(~p)~n", [{Arg1, Arg2, Arg3}]).
+ 
 
 find_target() ->
     ok.
@@ -74,9 +72,7 @@ check_apply_skill(SkillId, ObjKey) ->
 
 notify_effect() ->
     ok.
-
-throw(Msg) ->
-    ok.
+ 
 
 get_attr(AttrNameList) ->
     [Name || Name <- AttrNameList].
