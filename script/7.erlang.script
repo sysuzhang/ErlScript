@@ -1,6 +1,10 @@
 /*
  Erlang语法测试
-*/ 
+ */
 {ok, T} = find_target(200,{300, 200});
 [Hp, Mp] = get_attr([hp, mp]);
-return lists:max([Hp, Mp]);
+PlayerLv = playerlv();
+AttackFight = 0; 
+Bless = 0;
+T =  (0.98 + 0.9 - Bless/(PlayerLv*100)) + AttackFight;
+//return lists:max([Hp, Mp]);

@@ -1,6 +1,6 @@
 %%非终结符
 Nonterminals
-scripts metascript statements statement if_statement while_statement function wait_function args arg express conditions condition compare vars tuple list match arithmetic logic.
+scripts metascript statements statement if_statement while_statement function wait_function args arg expresses express conditions condition compare vars tuple list match arithmetic logic.
 
 %终结符
 Terminals '+' '-' '*' '/' '.' '=' ':' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '[' ']' '{' '}' 'if' 'else' 'while' 'wait' 'script' 'return' atom integer float var.
@@ -33,25 +33,28 @@ while_statement -> 'while' '(' conditions ')' '{' statements '}' : {'WHILE', '$3
 wait_function -> 'wait' '(' args  ')' : {'WAIT', '$3'}.
 
 %%语句
-statement -> express  : {express, '$1'}.
-statement -> match '=' express : {match, '$1', '$3'}. 
+statement -> expresses  : {expresses, '$1'}.
+statement -> match '=' expresses : {match, '$1', '$3'}. 
 statement -> 'return' arg : {return, '$2'}.  %%支持脚本返回值 
 
 %%条件分析
 conditions -> condition : {condition, '$1'}.
 conditions -> condition logic conditions : {'$1','$2','$3'}.
 
-condition -> express : {express, '$1'}.
-condition -> express compare condition: {express, '$1', '$2', '$3'}.
+condition -> expresses : {expresses, '$1'}.
+condition -> expresses compare condition: {expresses, '$1', '$2', '$3'}.
 
 %%表达式
 %Expressions only contain identifiers, literals and operators, where operators include arithmetic and boolean operators, 
 %the function call operator () the subscription operator [] and similar, and can be reduced to some kind of "value"
+expresses -> express : {express, '$1'}. 
+expresses -> express arithmetic expresses : {operation, '$1', '$2', '$3'}.
+  
 express -> vars : {vars, '$1'}.
 express -> atom : {atom, unwrap('$1')}.
 express -> function : {function, '$1'}.
-express -> vars arithmetic express : {operation, '$1', '$2', '$3'}.
-
+express -> '(' expresses ')' : {priority, '$2'}.%%支持优先级 
+   
 %%函数
 function -> atom '(' args ')' : {func, unwrap('$1'), '$3'}.  
 function -> atom ':' atom '(' args ')' : {func, unwrap('$1'),  unwrap('$3'), '$5'}.   %%支持命名空间
@@ -72,11 +75,8 @@ list -> '[' args ']': {element, '$2'}.
 args -> '$empty' : [].
 args -> arg : ['$1']. 
 args -> arg ',' args : ['$1'| '$3'].
-
-arg -> var : {var, unwrap('$1')}.
-arg -> integer : unwrap('$1').
-arg -> atom : unwrap('$1').
-arg -> function : {function, '$1'}.
+ 
+arg -> expresses : {expresses, '$1'}.
 arg -> tuple : {tuple, '$1'}.   %%参数支持元组
 arg -> list : {list, '$1'}.     %%支持列表
 

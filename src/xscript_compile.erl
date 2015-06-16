@@ -121,7 +121,16 @@ generate_files(ScriptFiles,Options) when is_list(ScriptFiles) ->
                         put(cur_scriptid, list_to_integer(ScriptId)),%%设置当前处理的Script
                         
                         {ok,String} = parse_file(File),   %%词法分析
-                        {ok,FirstParsed} = xscript_parser:parse(String), %%语法分析,得到语法树
+                         
+                        %%语法分析,得到语法树
+                        FirstParsed = 
+                            case xscript_parser:parse(String) of 
+                                {ok, Parsed}  ->
+                                    Parsed;
+                                Error -> 
+                                    ErrStr = io:format("Script:~ts parse error:~n~p", [ScriptId, Error]),
+                                    throw({parse_script_error, ErrStr})
+                            end,
                                                
                         
                         generate_commnet(File),  %%生成注释
@@ -530,7 +539,8 @@ statements(Indent, Statements, FunID) ->
 metascript(MetaScript) ->
     case MetaScript of
         {param, ParamList} ->
-            Params = [Param || {_, Param} <- ParamList],
+            %% TODO 需要根据语法定义来做
+            Params = [Param || {_, {_, {_, Param}}} <- ParamList],
             add_script_source_element(0, Params, #script_source.param);
         _ ->
             none
@@ -539,13 +549,13 @@ metascript(MetaScript) ->
 
 statement(Indent, Statement, FunID) ->
     case Statement of
-        {express, Express} ->
-            express(Indent, Express);
-        {match, MatchLeft, Express} ->
+        {expresses, Express} ->
+            expresses(Indent, Express);
+        {match, MatchLeft, Expresses} ->
             match(Indent, MatchLeft), 
             AssignStr = io_lib:format(" = ", []),
             add_body(0, AssignStr),
-            express(0, Express); 
+            expresses(0, Expresses); 
         {return, Arg} ->
             add_body(Indent, ""),
             arg(0, Arg)
@@ -685,23 +695,16 @@ conditions(Indent, Conditions) ->
 
 condition(Indent, Condition) ->
     case Condition of
-        {express, Express} ->
-            express(Indent, Express),
+        {expresses, Expresses} ->
+            expresses(Indent, Expresses),
             ok;
-        {express, Express, Compare, OtherCondition} ->
-            express(Indent, Express),
+        {expresses, Expresses, Compare, OtherCondition} ->
+            expresses(Indent, Expresses),
             compare(0, Compare),
             condition(0, OtherCondition),
-            ok;
-        {function, Function} ->
-            function(Indent, Function),
-            ok;
-        {function, Function, Compare, OtherCondition} ->
-            function(Indent, Function),
-            compare(0, Compare),
-            condition(0, OtherCondition),
-            ok;
+            ok; 
         _ ->
+            io:format("unhandle condition:~p~n", [Condition]),
             ok
     end,
     ok.
@@ -752,32 +755,44 @@ vars(Indent, Vars) ->
     StrVars = 
         case Vars of
             V when erlang:is_integer(V) orelse erlang:is_float(V) ->
-                io_lib:format(" ~w ", [Vars]);
+                io_lib:format("~w", [Vars]);
             _ ->
-                io_lib:format(" ~s ", [Vars])
+                io_lib:format("~s", [Vars])
         end,
             
     add_body(Indent, StrVars),
     ok. 
 
-
+expresses(Indent, Expresses)->
+    case Expresses of
+        {express, Express} ->
+            express(Indent, Express),
+            ok;
+        {operation, OtherExpress1, Arithmetic, OtherExpresses2} -> 
+            express(Indent, OtherExpress1), 
+            arithmetic(0, Arithmetic),
+            expresses(0, OtherExpresses2),
+            ok
+    end,        
+    ok.
+    
 
 express(Indent, Express) ->
-    case Express of
+    case Express of 
         {vars, Vars} ->
             vars(Indent, Vars),
             ok;
         {atom, Atom} ->
-            StrAtom = io_lib:format(" ~w ", [Atom]),
+            StrAtom = io_lib:format("~w", [Atom]),
             add_body(Indent, StrAtom),
             ok;
         {function, Function} ->
             function(Indent, Function),
             ok;
-        {Vars, Arithmetic,  OtherExpress} ->
-            vars(0, Vars),
-            arithmetic(0, Arithmetic),
-            express(Indent, OtherExpress),
+        {priority, OtherExpresses} ->
+            add_body(Indent, "("),
+            expresses(0, OtherExpresses),
+            add_body(0, ")"),
             ok;
         _ ->
             io:format("unknow statement function [~w]", [Express])
@@ -856,26 +871,18 @@ args(_Indent, [Arg]) ->
 args(Indent, [Arg|OtherArgs]) ->
     arg(0, Arg),
     add_body(0, ","),
-    args(Indent, OtherArgs),
+    args(0, OtherArgs),
     ok.
 
 arg(Indent, Arg) ->
     case Arg of
-        {function, FuncName} ->
-            function(0, FuncName);
-        {var, StrVar} ->
-            Output = io_lib:format("~s", [StrVar]),
-            add_body(Indent, Output),
-            ok;
+        {expresses, Express} ->
+            expresses(0, Express); 
         {list, List} -> 
             list(Indent, List),
             ok;
         {tuple, Tuple} ->
-            tuple(Indent, Tuple);
-        Arg ->                    
-            Output = io_lib:format("~w", [Arg]),
-            add_body(Indent, Output),
-            ok
+            tuple(Indent, Tuple)
     end,
     ok.
 
