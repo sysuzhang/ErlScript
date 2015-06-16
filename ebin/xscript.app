@@ -7,5 +7,5 @@
               {env,[]},
               {modules,[xscript_app,xscript_compile,xscript_file,
                         xscript_function_define,xscript_scanner,xscript_sup,
-                        xscript_utility,xscript_vm,xscript_worker,
-                        xscript_test,xscript_parser,xscript_mod_script]}]}.
+                        xscript_test,xscript_utility,xscript_vm,
+                        xscript_worker,xscript_parser,xscript_mod_script]}]}.

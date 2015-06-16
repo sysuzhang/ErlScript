@@ -42,7 +42,7 @@
                         }).
 
 
--export([test/0, test1/0, test2/0, test3/0, test4/0, test5/0, test_one/0, test_dir/0]).
+-export([test/0, test1/0, test2/0, test3/0, test4/0, test5/0, test6/0, test7/0, test_one/0, test_dir/0]).
 test() ->
     test1(),
     test2(),
@@ -61,6 +61,10 @@ test4() ->
     generate_file("./script/4.测试.script", [{out_dir, "./script/"}]).
 test5() ->
     generate_file("./script/5.prarm.script", [{out_dir, "./script/"}]).
+test6() ->
+    generate_file("./script/6.localfun本地函数.script", [{out_dir, "./script/"}]).
+test7() ->
+    generate_file("./script/7.erlang.script", [{out_dir, "./script/"}]).
 
 test_one() ->
     generate_files(["./script/1.seq.script", "./script/2.if.script", "./script/3.loop.script"], [{out_dir, "./script/"}]).
@@ -535,13 +539,10 @@ statement(Indent, Statement, FunID) ->
     case Statement of
         {express, Express} ->
             express(Indent, Express);
-        {assignment, Var, Express} ->
-            AssignStr = io_lib:format("~s = ", [Var]),
-            add_body(Indent, AssignStr),
-            express(0, Express);
-        {assert, Atom, Express} ->
-            AssignStr = io_lib:format("~w = ", [Atom]),
-            add_body(Indent, AssignStr),
+        {match, MatchLeft, Express} ->
+            match(Indent, MatchLeft), 
+            AssignStr = io_lib:format(" = ", []),
+            add_body(0, AssignStr),
             express(0, Express)
     end,
     ok.
@@ -778,6 +779,21 @@ express(Indent, Express) ->
     end,
     ok.
 
+%%匹配
+match(Indent, MatchLeft) ->
+    case MatchLeft of 
+        {tuple, Tuple} ->
+            add_body(Indent, "{"),
+            tuple(Indent, Tuple),
+            add_body(0, "}"); 
+        {assignment, Var} ->
+            AssignStr = io_lib:format("~s ", [Var]),
+            add_body(Indent, AssignStr); 
+        {assert, Atom} ->
+            AssignStr = io_lib:format("~w  ", [Atom]),
+            add_body(Indent, AssignStr)
+    end,
+    ok.
 
 function(Indent, Statement) ->
     case Statement of
@@ -803,6 +819,12 @@ function(Indent, Statement) ->
             throw({"unknow statement function [~w]", [Statement]})
     end,
     ok.
+
+tuple(Indent, Tuple) ->
+    case Tuple of
+        {element, Args} ->
+            args(Indent, Args)
+    end.
 
 args(_Indent, []) ->
     ok;

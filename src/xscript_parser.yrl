@@ -1,6 +1,6 @@
 %%非终结符
 Nonterminals
-scripts metascript statements statement if_statement while_statement function wait_function args arg express conditions condition compare vars arithmetic logic.
+scripts metascript statements statement if_statement while_statement function wait_function args arg express conditions condition compare vars tuple match arithmetic logic.
 
 %终结符
 Terminals '+' '-' '*' '/' '.' '=' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '[' ']' '{' '}' 'if' 'else' 'while' 'wait' 'script' atom integer float var.
@@ -34,8 +34,8 @@ wait_function -> 'wait' '(' args  ')' : {'WAIT', '$3'}.
 
 %%语句
 statement -> express  : {express, '$1'}.
-statement -> vars '=' express : {assignment, '$1', '$3'}.
-statement -> atom '=' express : {assert, unwrap('$1'), '$3'}.
+statement -> match '=' express : {match, '$1', '$3'}.
+%statement -> atom '=' express : {assert, unwrap('$1'), '$3'}.
 
 %%条件分析
 conditions -> condition : {condition, '$1'}.
@@ -54,6 +54,14 @@ express -> vars arithmetic express : {operation, '$1', '$2', '$3'}.
 
 %%函数
 function -> atom '(' args ')' : {func, unwrap('$1'), '$3'}.  
+
+%%匹配
+match -> tuple : {tuple, '$1'}.
+match -> atom : {assert, unwrap('$1')}.
+match -> vars : {assignment, '$1'}.
+
+%%元组
+tuple -> '{' args '}': {element, '$2'}.
 
 %%参数
 args -> '$empty' : [].

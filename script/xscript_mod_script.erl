@@ -1,5 +1,5 @@
 %%自动生成,请不要修改
-%%@datetime:{{2015,6,14}{14,40,59}}
+%%@datetime:{{2015,6,16}{10,0,42}}
 -module(xscript_mod_script).
 
 -compile([export_all]).
@@ -11,20 +11,9 @@ script_execute(ScriptId) ->
 script_execute(ScriptId, Args) ->
     script_execute(ScriptId, 0, Args).
 
-%%prarm
-script_execute(5, 0, [SKillID,ObjectKey,Pos]) ->
-    case 
-        xscript_function_define:check_apply_skill(SKillID,ObjectKey) =:= true  of 
-        true ->
-            xscript_function_define:notify_effect(),
-            TailFun1 = 
-                fun() ->
-                    xscript_function_define:attack_target(100,[ObjectKey])
-                end, 
-            xscript_function_define:wait(3000, 5, TailFun1);
-        false ->
-            xscript_function_define:throw(error)
-    end;
+%%erlang
+script_execute(7, 0, []) ->
+    {ok,T} = xscript_function_define:find_target(200,300);
 script_execute(ScriptId, FunId, Args) ->
     ?LOG_DEBUG("Not Defined ScriptId: ~w, FunId:~w, Args:~w", [ScriptId, FunId, Args]).
 
