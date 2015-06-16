@@ -1,4 +1,4 @@
 /*
  Erlang语法测试
 */ 
-{ok, T} = find_target(200,300);
+{ok, T} = find_target(200,{300, 200});

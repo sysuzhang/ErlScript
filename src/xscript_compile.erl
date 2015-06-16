@@ -783,9 +783,7 @@ express(Indent, Express) ->
 match(Indent, MatchLeft) ->
     case MatchLeft of 
         {tuple, Tuple} ->
-            add_body(Indent, "{"),
-            tuple(Indent, Tuple),
-            add_body(0, "}"); 
+            tuple(Indent, Tuple); 
         {assignment, Var} ->
             AssignStr = io_lib:format("~s ", [Var]),
             add_body(Indent, AssignStr); 
@@ -821,10 +819,12 @@ function(Indent, Statement) ->
     ok.
 
 tuple(Indent, Tuple) ->
+    add_body(Indent, "{"),
     case Tuple of
         {element, Args} ->
             args(Indent, Args)
-    end.
+    end,
+    add_body(0, "}").
 
 args(_Indent, []) ->
     ok;
@@ -850,6 +850,8 @@ arg(Indent, Arg) ->
             args(0, Args),
             add_body(Indent, "]"),
             ok;
+        {tuple, Tuple} ->
+            tuple(Indent, Tuple);
         Arg ->                    
             Output = io_lib:format("~w", [Arg]),
             add_body(Indent, Output),

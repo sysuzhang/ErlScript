@@ -72,6 +72,7 @@ arg -> var : {var, unwrap('$1')}.
 arg -> integer : unwrap('$1').
 arg -> atom : unwrap('$1').
 arg -> function : {function, '$1'}.
+arg -> tuple : {tuple, '$1'}.   %%参数支持元组
 arg -> '[' args ']' : {vparam, '$2'}.  %%支持可变参数
 
 %%变量

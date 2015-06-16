@@ -1,5 +1,5 @@
 %%自动生成,请不要修改
-%%@datetime:{{2015,6,16}{10,0,42}}
+%%@datetime:{{2015,6,16}{10,5,36}}
 -module(xscript_mod_script).
 
 -compile([export_all]).
@@ -13,7 +13,7 @@ script_execute(ScriptId, Args) ->
 
 %%erlang
 script_execute(7, 0, []) ->
-    {ok,T} = xscript_function_define:find_target(200,300);
+    {ok,T} = xscript_function_define:find_target(200,{300,200});
 script_execute(ScriptId, FunId, Args) ->
     ?LOG_DEBUG("Not Defined ScriptId: ~w, FunId:~w, Args:~w", [ScriptId, FunId, Args]).
 
