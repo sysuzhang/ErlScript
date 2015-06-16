@@ -545,7 +545,9 @@ statement(Indent, Statement, FunID) ->
             match(Indent, MatchLeft), 
             AssignStr = io_lib:format(" = ", []),
             add_body(0, AssignStr),
-            express(0, Express)
+            express(0, Express); 
+        {return, Arg} ->
+            arg(Indent, Arg)
     end,
     ok.
     
@@ -858,10 +860,8 @@ arg(Indent, Arg) ->
             Output = io_lib:format("~s", [StrVar]),
             add_body(Indent, Output),
             ok;
-        {vparam, Args} -> 
-            add_body(Indent, "["),
-            args(0, Args),
-            add_body(Indent, "]"),
+        {list, List} -> 
+            list(Indent, List),
             ok;
         {tuple, Tuple} ->
             tuple(Indent, Tuple);

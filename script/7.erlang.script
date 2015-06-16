@@ -3,3 +3,4 @@
 */ 
 {ok, T} = find_target(200,{300, 200});
 [Hp, Mp] = get_attr([hp, mp]);
+return {Hp, Mp};

@@ -6,7 +6,7 @@ D = [0-9]
 F = (\+|-)?[0-9]+\.[0-9]+((E|e)(\+|-)?[0-9]+)?
 HEX = 0x[0-9A-Fa-f]+
 WS  = ([\000-\s]|%.*)
-KW = (if|else|while|wait|script)
+KW = (if|else|while|wait|script|return)
 DS = (&&|==|!=|\|\|)
 S = [\(\)\]\[\{\};=><,\+-/\*\.!]
 

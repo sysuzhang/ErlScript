@@ -80,6 +80,9 @@ throw(Msg) ->
 
 get_attr(AttrNameList) ->
     [Name || Name <- AttrNameList].
+
+set_attr(AttrTupleList) ->
+    ok.
 %% ====================================================================
 %% Internal functions
 %% ====================================================================

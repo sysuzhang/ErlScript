@@ -11,7 +11,8 @@ script_execute(ScriptId, Args) ->
 %%erlang
 script_execute(7, 0, []) ->
     {ok,T} = xscript_function_define:find_target(200,{300,200}),
-    [Hp,Mp] = xscript_function_define:get_attr([hp,mp]);
+    [Hp,Mp] = xscript_function_define:get_attr([hp,mp]),
+    {Hp,Mp};
 script_execute(ScriptId, FunId, Args) ->
     ?LOG_DEBUG("Not Defined ScriptId: ~w, FunId:~w, Args:~w", [ScriptId, FunId, Args]).
 

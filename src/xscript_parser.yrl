@@ -3,7 +3,7 @@ Nonterminals
 scripts metascript statements statement if_statement while_statement function wait_function args arg express conditions condition compare vars tuple list match arithmetic logic.
 
 %终结符
-Terminals '+' '-' '*' '/' '.' '=' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '[' ']' '{' '}' 'if' 'else' 'while' 'wait' 'script' atom integer float var.
+Terminals '+' '-' '*' '/' '.' '=' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '[' ']' '{' '}' 'if' 'else' 'while' 'wait' 'script' 'return' atom integer float var.
 
 Rootsymbol scripts.
 
@@ -34,8 +34,8 @@ wait_function -> 'wait' '(' args  ')' : {'WAIT', '$3'}.
 
 %%语句
 statement -> express  : {express, '$1'}.
-statement -> match '=' express : {match, '$1', '$3'}.
-%statement -> atom '=' express : {assert, unwrap('$1'), '$3'}.
+statement -> match '=' express : {match, '$1', '$3'}. 
+statement -> 'return' arg : {return, '$2'}.  %%支持脚本返回值 
 
 %%条件分析
 conditions -> condition : {condition, '$1'}.
@@ -77,7 +77,7 @@ arg -> integer : unwrap('$1').
 arg -> atom : unwrap('$1').
 arg -> function : {function, '$1'}.
 arg -> tuple : {tuple, '$1'}.   %%参数支持元组
-arg -> '[' args ']' : {vparam, '$2'}.  %%支持可变参数
+arg -> list : {list, '$1'}.     %%支持列表
 
 %%变量
 vars -> integer : unwrap('$1').
