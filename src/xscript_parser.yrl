@@ -1,6 +1,6 @@
 %%非终结符
 Nonterminals
-scripts metascript statements statement if_statement while_statement function wait_function args arg express conditions condition compare vars tuple match arithmetic logic.
+scripts metascript statements statement if_statement while_statement function wait_function args arg express conditions condition compare vars tuple list match arithmetic logic.
 
 %终结符
 Terminals '+' '-' '*' '/' '.' '=' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '[' ']' '{' '}' 'if' 'else' 'while' 'wait' 'script' atom integer float var.
@@ -57,11 +57,15 @@ function -> atom '(' args ')' : {func, unwrap('$1'), '$3'}.
 
 %%匹配
 match -> tuple : {tuple, '$1'}.
+match -> list : {list, '$1'}.
 match -> atom : {assert, unwrap('$1')}.
 match -> vars : {assignment, '$1'}.
 
 %%元组
 tuple -> '{' args '}': {element, '$2'}.
+
+%%列表
+list -> '[' args ']': {element, '$2'}.
 
 %%参数
 args -> '$empty' : [].

@@ -10,6 +10,8 @@
 %% ====================================================================
 -export([generate_file/1, generate_file/2]).
 -export([generate_dir/1, generate_dir/2]).
+-export([get_script_modules/0]).
+-export([gen_doc/1]).
 -export([comment/1]). 
 -export([get_all_define_functions/0]).
 -include("xscript_compile.hrl").
@@ -371,11 +373,11 @@ output_functions(Fun) ->
     ok.
 
 generate_header(Module) ->
-    Header = io_lib:format("%%自动生成,请不要修改\n%%@datetime:{~w~w}\n-module(~s).\n\n-compile([export_all]).\n\n", 
-                           [erlang:date(), erlang:time(), Module]), 
-    add_script_file_element(0, Header, #script_file.header),
+    Header = io_lib:format("%% autogen from ~p\n", [?MODULE_STRING]),
+    StrMod = io_lib:format("-module(~p).\n", [list_to_atom(Module)]),
+    Export = "-compile(export_all).\n",
+    add_script_file_element(0, Header ++ StrMod ++ Export, #script_file.header),
     ok.
-
 generate_include() ->
     IncludeStr = io_lib:format(?INCLUDE_FILE, []),
     add_script_file_element(0, IncludeStr, #script_file.include).
@@ -513,12 +515,12 @@ statements(Indent, Statements, FunID) ->
         [{while_statement, WhileStatements, []}] -> 
             {ok, CondFunID, LoopFunID} = while_statement(Indent, WhileStatements),
             StrWhile = io_lib:format("script_loop(CondFun~w, LoopFun~w)", [CondFunID, LoopFunID]),
-            add_body(Indent + ?INDENT_SPACE, StrWhile),    
+            add_body(Indent, StrWhile),    
             ok;
         [{while_statement, WhileStatements, OtherStatements}] -> 
             {ok, CondFunID, LoopFunID} = while_statement(Indent, WhileStatements),
             StrWhile = io_lib:format("script_loop(CondFun~w, LoopFun~w),\n", [CondFunID, LoopFunID]),
-            add_body(Indent + ?INDENT_SPACE, StrWhile),  
+            add_body(Indent, StrWhile),  
             statements(Indent, OtherStatements, FunID),
             ok; 
         _ ->
@@ -625,19 +627,19 @@ while_statement(Indent, WhileStatements) ->
         {'WHILE', Conditions, Statements} ->
              CondFunID = get_fun_id(),
              CondFunStr = io_lib:format("CondFun~w = \n", [CondFunID]),
-             add_body(Indent + ?INDENT_SPACE, CondFunStr),
-             add_body(Indent + ?INDENT_SPACE * 2 , "fun() ->\n"),
-             conditions(Indent + ?INDENT_SPACE * 3, Conditions), 
+             add_body(Indent, CondFunStr),
+             add_body(Indent + ?INDENT_SPACE * 1 , "fun() ->\n"),
+             conditions(Indent + ?INDENT_SPACE * 2, Conditions), 
              add_body(0, "\n"),
-             add_body(Indent + ?INDENT_SPACE * 2, "end,\n"),
+             add_body(Indent + ?INDENT_SPACE * 1, "end,\n"),
              
              LoopFunID = get_fun_id(),
              LoopFunStr = io_lib:format("LoopFun~w = \n", [LoopFunID]),
-             add_body(Indent + ?INDENT_SPACE, LoopFunStr),
-             add_body(Indent + ?INDENT_SPACE * 2 , "fun() ->\n"),
-             statements(Indent + ?INDENT_SPACE * 3, Statements, ?DEFAULT_TAILFUNID), 
+             add_body(Indent, LoopFunStr),
+             add_body(Indent + ?INDENT_SPACE * 1 , "fun() ->\n"),
+             statements(Indent + ?INDENT_SPACE * 2, Statements, ?DEFAULT_TAILFUNID), 
              add_body(0, "\n"),
-             add_body(Indent + ?INDENT_SPACE *2, "end,\n"),
+             add_body(Indent + ?INDENT_SPACE *1, "end,\n"),
               
              {ok, CondFunID, LoopFunID};
         _ ->
@@ -784,6 +786,8 @@ match(Indent, MatchLeft) ->
     case MatchLeft of 
         {tuple, Tuple} ->
             tuple(Indent, Tuple); 
+        {list, List} ->
+            list(Indent, List); 
         {assignment, Var} ->
             AssignStr = io_lib:format("~s ", [Var]),
             add_body(Indent, AssignStr); 
@@ -825,6 +829,15 @@ tuple(Indent, Tuple) ->
             args(Indent, Args)
     end,
     add_body(0, "}").
+
+
+list(Indent, Tuple) ->
+    add_body(Indent, "["),
+    case Tuple of
+        {element, Args} ->
+            args(Indent, Args)
+    end,
+    add_body(0, "]").
 
 args(_Indent, []) ->
     ok;
@@ -971,29 +984,43 @@ set_tail_funid(FunId, TailFunId) ->
            undefined
     end.
 
-get_all_define_functions() ->
-    DefindModuleList = ?FUNCTION_DEFINE,
-    lists:foldr(fun(Module, Acc) ->
-                        InfoList = Module:module_info(),                        
-                        ExportList = lists:keyfind(exports, 1, InfoList),
-                        DefineList = [ {Module, {FunName, Argc}}|| {FunName, Argc} <- erlang:element(2, ExportList), FunName =/= module_info],
-                        case catch lists:any(fun({_Module, {FunName2, Argc2}}) ->
-                                          case lists:keyfind({FunName2, Argc2}, 2, Acc) of
-                                              false ->
-                                                  false;
-                                              Tuple ->
-                                                  throw({ok, FunName2, Argc2, Tuple})
-                                          end
-                                  end, DefineList) of
-                            {ok, FunName, Argc, Tuple} ->
-                                io:format("Fun:~w:~w/~w, Already Default in ~p", [Module, FunName, Argc, Tuple]),
-                                throw({redefined, Module, FunName, Argc, Tuple});
-                            _ ->
-                                none
-                        end,
-                        DefineList ++ Acc
-                end, [], DefindModuleList).
+%% 函数映射模块 TODO 配置化
+get_script_modules() ->
+    case ?FUNC_DEFINE_TYPE of
+        ?FUNC_DEFINE_TYPE_MODULE ->
+            ?FUNCTION_DEFINE_MODULE;
+        ?FUNC_DEFINE_TYPE_DIR ->            
+            Dir = ?FUNCTION_DEFINE_DIR, 
+            true = filelib:is_dir(Dir),
+            FileNames = filelib:wildcard("*.erl", Dir),
+            [list_to_atom(filename:basename(FileName, ".erl")) || FileName <- FileNames];
+        _ ->
+            throw(config_error)
+    end. 
 
+-spec get_all_define_functions() -> [{Mod :: atom(), {Fun :: atom(), Arity :: integer()}}].
+%% @doc 拿到所有函数定义, 如果有函数重定义, 抛异常
+get_all_define_functions() ->
+    DefindModuleList = get_script_modules(),
+    lists:foldl(fun(Module, Acc) ->
+        ExportList = Module:module_info(exports),
+        DefineList = [{Module, {FunName, Arity}} || {FunName, Arity} <- ExportList, FunName =/= module_info],
+        case lists:any(fun({_Module, {FunName2, Argc2}}) ->
+            case lists:keyfind({FunName2, Argc2}, 2, Acc) of
+                false ->
+                    false;
+                Tuple ->
+                    throw({ok, FunName2, Argc2, Tuple})
+            end
+        end, DefineList) of
+            {ok, FunName, Argc, Tuple} ->
+                io:format("Fun:~w:~w/~w, Already Default in ~p", [Module, FunName, Argc, Tuple]),
+                throw({redefined, Module, FunName, Argc, Tuple});
+            _ ->
+                none
+        end,
+        DefineList ++ Acc
+    end, [], DefindModuleList).
 
 %%获得函数定义
 get_function_define(FunName, Argc) ->
@@ -1003,3 +1030,16 @@ get_function_define(FunName, Argc) ->
         _ ->
             false
     end.
+
+gen_doc(Options) ->
+    Files = get_src_files(),
+    AddOptions = [
+        % [{private, true}],
+%%         {title, "lalala"}
+    ],
+    edoc:files(Files, Options ++ AddOptions),
+    ok.
+
+
+get_src_files() ->
+    [proplists:get_value(source, Mod:module_info(compile)) || Mod <- get_script_modules()].
