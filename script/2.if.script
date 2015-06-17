@@ -5,11 +5,11 @@ rongjie@2015.03.09
 moverandom();
 if(level() != false)
 {
-      apply(1,skill,1204); //使用技能
+      erlang:apply(1,skill,1204); //使用技能
 }
 else
 {
-    apply(2,skill,1205);
+    erlang:apply(2,skill,1205);
    
     wait(200); 
     if( level() > 5)
