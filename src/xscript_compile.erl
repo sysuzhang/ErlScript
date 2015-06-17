@@ -23,6 +23,7 @@
 %%代码生成保存
 -record(script_file, {sources = orddict:new(),
     defined_function = [], %%已定义的函数
+	std_function = [],
     header = [],  %%Header代码
     include = [], %%include代码
     default_function = [],
@@ -88,7 +89,8 @@ generate_files(ScriptFiles, Options) when is_list(ScriptFiles) ->
     erlang:erase(),
     IsAllInOne = proplists:get_bool(one_output, Options),
 
-    put(script_file, #script_file{defined_function = get_all_define_functions(Options)}),
+    put(script_file, #script_file{defined_function = get_all_define_functions(Options),
+                                  std_function = get_all_std_functions(Options)}),
 
     {template, Template} = proplists:lookup(template, Options),
 
@@ -521,14 +523,14 @@ statement(Indent, Statement, FunID) ->
     case Statement of
         {expresses, Express} ->
             expresses(Indent, Express);
-        {match, MatchLeft, Expresses} ->
-            match(Indent, MatchLeft),
+        {match, Term, Expresses} ->
+            term(Indent, Term),
             AssignStr = io_lib:format(" = ", []),
             add_body(0, AssignStr),
             expresses(0, Expresses);
         {return, Arg} ->
             add_body(Indent, ""),
-            arg(0, Arg)
+            term(0, Arg)
     end,
     ok.
 
@@ -729,9 +731,9 @@ vars(Indent, Vars) ->
     StrVars =
         case Vars of
             V when erlang:is_integer(V) orelse erlang:is_float(V) ->
-                io_lib:format(" ~w ", [Vars]);
+                io_lib:format("~w", [Vars]);
             _ ->
-                io_lib:format(" ~s ", [Vars])
+                io_lib:format("~s", [Vars])
         end,
 
     add_body(Indent, StrVars),
@@ -753,13 +755,9 @@ expresses(Indent, Expresses) ->
 
 express(Indent, Express) ->
     case Express of
-        {vars, Vars} ->
-            vars(Indent, Vars),
-            ok;
-        {atom, Atom} ->
-            StrAtom = io_lib:format(" ~w ", [Atom]),
-            add_body(Indent, StrAtom),
-            ok;
+        {term, Term} ->
+            term(Indent, Term),
+            ok; 
         {function, Function} ->
             function(Indent, Function),
             ok;
@@ -773,21 +771,7 @@ express(Indent, Express) ->
     end,
     ok.
 
-%%匹配
-match(Indent, MatchLeft) ->
-    case MatchLeft of
-        {tuple, Tuple} ->
-            tuple(Indent, Tuple);
-        {list, List} ->
-            list(Indent, List);
-        {assignment, Var} ->
-            AssignStr = io_lib:format("~s ", [Var]),
-            add_body(Indent, AssignStr);
-        {assert, Atom} ->
-            AssignStr = io_lib:format("~w  ", [Atom]),
-            add_body(Indent, AssignStr)
-    end,
-    ok.
+ 
 
 function(Indent, Statement) ->
     case Statement of
@@ -840,25 +824,31 @@ list(Indent, Tuple) ->
 args(_Indent, []) ->
     ok;
 args(_Indent, [Arg]) ->
-    arg(0, Arg),
+    expresses(0, Arg),
     ok;
 args(Indent, [Arg | OtherArgs]) ->
-    arg(0, Arg),
+    expresses(0, Arg),
     add_body(0, ","),
     args(0, OtherArgs),
     ok.
 
-arg(Indent, Arg) ->
-    case Arg of
-        {expresses, Express} ->
-            expresses(0, Express);
+term(Indent, Term) ->
+    case Term of
+        {tuple, Tuple} ->
+            tuple(Indent, Tuple);
         {list, List} ->
             list(Indent, List),
             ok;
-        {tuple, Tuple} ->
-            tuple(Indent, Tuple)
+        {vars, Vars} ->
+            vars(Indent, Vars);
+        {atom, Atom} ->
+            atom(Indent, Atom)
     end,
     ok.
+
+atom(Indent, Atom) ->
+    Str = io_lib:format("~w", [Atom]),
+    add_body(Indent, Str).
 
 get_cur_scriptid() ->
     case get(cur_scriptid) of
@@ -989,32 +979,47 @@ get_script_modules() ->
 -spec get_all_define_functions(proplists:proplist()) -> [{Mod :: atom(), {Fun :: atom(), Arity :: integer()}}].
 %% @doc 拿到所有函数定义, 如果有函数重定义, 抛异常
 get_all_define_functions(Cfg) ->
-    {def_mods, DefindModuleList} = proplists:lookup(def_mods, Cfg),
-    lists:foldl(fun(Module, Acc) ->
-        ExportList = Module:module_info(exports),
-        DefineList = [{Module, {FunName, Arity}} || {FunName, Arity} <- ExportList, FunName =/= module_info],
-        case lists:any(fun({_Module, {FunName2, Argc2}}) ->
-            case lists:keyfind({FunName2, Argc2}, 2, Acc) of
-                false ->
-                    false;
-                Tuple ->
-                    throw({ok, FunName2, Argc2, Tuple})
-            end
-        end, DefineList) of
-            {ok, FunName, Argc, Tuple} ->
-                io:format("Fun:~w:~w/~w, Already Default in ~p", [Module, FunName, Argc, Tuple]),
-                throw({redefined, Module, FunName, Argc, Tuple});
-            _ ->
-                none
-        end,
-        DefineList ++ Acc
-    end, [], DefindModuleList).
+    {def_mods, DefinedModuleList} = proplists:lookup(def_mods, Cfg),
+	get_module_funtions(DefinedModuleList).
+
+%% @doc 拿到标准库里的函数,由于脚本函数是全局的，所以引进的模块不能有同签名的函数
+get_all_std_functions(Cfg) ->
+	{std_mods, StdModuleList} = proplists:lookup(std_mods, Cfg),
+	get_module_funtions(StdModuleList).
+
+get_module_funtions(ModuleList) ->
+	lists:foldl(fun(Module, Acc) ->
+		ExportList = Module:module_info(exports),
+		DefineList = [{Module, {FunName, Arity}} || {FunName, Arity} <- ExportList, FunName =/= module_info],
+		case lists:any(fun({_Module, {FunName2, Argc2}}) ->
+			case lists:keyfind({FunName2, Argc2}, 2, Acc) of
+				false ->
+					false;
+				Tuple ->
+					throw({ok, FunName2, Argc2, Tuple})
+			end
+		               end, DefineList) of
+			{ok, FunName, Argc, Tuple} ->
+				io:format("Fun:~w:~w/~w, conflict defined in ~p", [Module, FunName, Argc, Tuple]),
+				throw({redefined, Module, FunName, Argc, Tuple});
+			_ ->
+				none
+		end,
+		DefineList ++ Acc
+	            end, [], ModuleList).
+
 
 %%获得函数定义
 get_function_define(FunName, Argc) ->
     case get(script_file) of
-        #script_file{defined_function = DefinedFunction} ->
-            lists:keyfind({FunName, Argc}, 2, DefinedFunction);
+        #script_file{defined_function = DefinedFunction, std_function = StdFunction} ->
+            case lists:keyfind({FunName, Argc}, 2, DefinedFunction) of
+				false ->
+					%%如果没有，则查系统标准库
+					lists:keyfind({FunName, Argc}, 2, StdFunction);
+				Result ->
+					Result
+            end;
         _ ->
             false
     end.

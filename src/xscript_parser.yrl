@@ -1,6 +1,6 @@
 %%非终结符
 Nonterminals
-scripts metascript statements statement if_statement while_statement function wait_function args arg expresses express conditions condition compare vars tuple list match arithmetic logic.
+scripts metascript statements statement if_statement while_statement function wait_function args expresses express conditions condition compare vars tuple list term arithmetic logic.
 
 %终结符
 Terminals '+' '-' '*' '/' '.' '=' ':' '&&' '||' '!' '>' '<' '==' '!=' ';' ',' '(' ')' '[' ']' '{' '}' 'if' 'else' 'while' 'wait' 'script' 'return' atom integer float var.
@@ -34,8 +34,8 @@ wait_function -> 'wait' '(' args  ')' : {'WAIT', '$3'}.
 
 %%语句
 statement -> expresses  : {expresses, '$1'}.
-statement -> match '=' expresses : {match, '$1', '$3'}. 
-statement -> 'return' arg : {return, '$2'}.  %%支持脚本返回值 
+statement -> term '=' expresses : {match, '$1', '$3'}. 
+statement -> 'return' expresses : {return, '$2'}.  %%支持脚本返回值 
 
 %%条件分析
 conditions -> condition : {condition, '$1'}.
@@ -50,9 +50,8 @@ condition -> expresses compare condition: {expresses, '$1', '$2', '$3'}.
 expresses -> express : {express, '$1'}. 
 expresses -> express arithmetic expresses : {operation, '$1', '$2', '$3'}.
   
-express -> vars : {vars, '$1'}.
-express -> atom : {atom, unwrap('$1')}.
-express -> function : {function, '$1'}.
+express -> term : {term, '$1'}. 
+express -> function : {function, '$1'}. 
 express -> '(' expresses ')' : {priority, '$2'}.%%支持优先级 
    
 %%函数
@@ -60,10 +59,10 @@ function -> atom '(' args ')' : {func, unwrap('$1'), '$3'}.
 function -> atom ':' atom '(' args ')' : {func, unwrap('$1'),  unwrap('$3'), '$5'}.   %%支持命名空间
 
 %%匹配
-match -> tuple : {tuple, '$1'}.
-match -> list : {list, '$1'}.
-match -> atom : {assert, unwrap('$1')}.
-match -> vars : {assignment, '$1'}.
+term -> tuple : {tuple, '$1'}.
+term -> list : {list, '$1'}.
+term -> atom : {atom, unwrap('$1')}.
+term -> vars : {vars, '$1'}.
 
 %%元组
 tuple -> '{' args '}': {element, '$2'}.
@@ -73,12 +72,9 @@ list -> '[' args ']': {element, '$2'}.
 
 %%参数
 args -> '$empty' : [].
-args -> arg : ['$1']. 
-args -> arg ',' args : ['$1'| '$3'].
- 
-arg -> expresses : {expresses, '$1'}.
-arg -> tuple : {tuple, '$1'}.   %%参数支持元组
-arg -> list : {list, '$1'}.     %%支持列表
+args -> expresses : ['$1']. 
+args -> expresses ',' args : ['$1'| '$3'].
+  
 
 %%变量
 vars -> integer : unwrap('$1').

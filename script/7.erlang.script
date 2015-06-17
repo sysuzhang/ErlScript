@@ -6,5 +6,6 @@
 PlayerLv = playerlv();
 AttackFight = 1; 
 Bless = 3;
+T2 = [{rongjie, 30}];
 T =  (0.98 + 0.9 - Bless/(PlayerLv*100)) + AttackFight;
 //return lists:max([Hp, Mp]);
